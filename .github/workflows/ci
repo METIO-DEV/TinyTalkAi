@@ -1,26 +1,27 @@
-name: CI                       # Titre qui apparaîtra dans l’onglet Actions
-on:                            # ➜ QUAND déclencher ?
-  push:                        #   • à chaque push sur main
+name: CI
+
+on:
+  push:
     branches: [main]
-  pull_request:                #   • à chaque Pull Request vers n’importe quelle branche
+  pull_request:
 
 jobs:
-  build-test:                  # ➜ 1 seul job (on peut en ajouter d’autres plus tard)
-    runs-on: ubuntu-latest     #   • Runner GitHub hébergé (Ubuntu 22.04)
+  build-test:
+    runs-on: ubuntu-latest
 
-    services:                  #   • Conteneurs « côtés » pour le job
-      mysql:                   #     — MySQL 8 pour les tests
+    services:
+      mysql:
         image: mysql:8
         env:
           MYSQL_ROOT_PASSWORD: root
           MYSQL_DATABASE: testing
-        ports: [3306:3306]     #     — Expose pour que le conteneur PHP s’y connecte
+        ports: [3306:3306]
 
-    steps:                     #   • Étapes exécutées séquentiellement
+    steps:
       # 1. Récupérer le code
-      - uses: actions/checkout@v4   # clone votre repo dans le runner
+      - uses: actions/checkout@v4
 
-      # 2. Cache Composer (évite de re-télécharger les dépendances)
+      # 2. Cache Composer
       - uses: actions/cache@v4
         with:
           path: ~/.composer/cache
@@ -29,31 +30,41 @@ jobs:
       # 3. Préparer PHP
       - uses: shivammathur/setup-php@v2
         with:
-          php-version: '8.3'        # version exécutée dans le runner
+          php-version: '8.3'
           extensions: mbstring pdo_mysql
-          coverage: none            # pas besoin de Xdebug ici
+          coverage: none
 
-      # 4. Installer les dépendances back-end
+      # 4. Générer .env et clé d’application
+      - name: Copy .env
+        run: php -r "file_exists('.env') || copy('.env.example', '.env');"
+      - name: Generate key
+        run: php artisan key:generate
+
+      # 5. Permissions Laravel
+      - name: Directory Permissions
+        run: chmod -R 777 storage bootstrap/cache
+
+      # 6. Installer les dépendances back-end
       - run: composer install --no-progress --no-interaction --prefer-dist
 
-      # 5. Préparer Node pour compiler les assets
+      # 7. Préparer Node pour compiler les assets
       - uses: actions/setup-node@v4
         with:
           node-version: '20'
 
       - run: |
-          npm ci                   # installe packages front
-          npm run build --if-present   # compile Vite/Tailwind
+          npm ci
+          npm run build --if-present
 
-      # 6. Lint & analyse statique
-      - run: vendor/bin/pint --test         # code-style Laravel Pint
-      - run: vendor/bin/phpstan analyse     # analyse statique
+      # 8. Lint & analyse statique
+      - run: vendor/bin/pint --test
+      - run: vendor/bin/phpstan analyse
 
-      # 7. Lancer les tests
+      # 9. Lancer les tests
       - name: Run Pest tests
-        env:                         # variables d’env pour les tests
+        env:
           DB_CONNECTION: mysql
-          DB_HOST: 127.0.0.1         # le service « mysql »
+          DB_HOST: 127.0.0.1
           DB_PORT: 3306
           DB_DATABASE: testing
           DB_USERNAME: root
