@@ -34,18 +34,18 @@ jobs:
           extensions: mbstring pdo_mysql
           coverage: none
 
-      # 4. Générer .env et clé d’application
+      # 4. Installer les dépendances back-end
+      - run: composer install --no-progress --no-interaction --prefer-dist
+
+      # 5. Générer .env et clé d’application
       - name: Copy .env
         run: php -r "file_exists('.env') || copy('.env.example', '.env');"
       - name: Generate key
         run: php artisan key:generate
 
-      # 5. Permissions Laravel
+      # 6. Permissions Laravel
       - name: Directory Permissions
         run: chmod -R 777 storage bootstrap/cache
-
-      # 6. Installer les dépendances back-end
-      - run: composer install --no-progress --no-interaction --prefer-dist
 
       # 7. Préparer Node pour compiler les assets
       - uses: actions/setup-node@v4
