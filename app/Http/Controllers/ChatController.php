@@ -35,13 +35,16 @@ class ChatController extends Controller
 
             if ($response->successful()) {
                 Log::info('Connexion à Ollama réussie');
+
                 return $response->json('models');
             }
 
             Log::error('Échec de la connexion à Ollama: '.$response->status());
+
             return [];
         } catch (\Exception $e) {
             Log::error('Erreur lors de la récupération des modèles Ollama: '.$e->getMessage());
+
             return [];
         }
     }
@@ -80,6 +83,7 @@ class ChatController extends Controller
 
             if ($response->successful()) {
                 Log::info('Réponse reçue d\'Ollama avec succès');
+
                 return response()->json([
                     'success' => true,
                     'response' => $response->json('response'),
