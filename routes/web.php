@@ -1,11 +1,11 @@
 <?php
 
-use Illuminate\Support\Facades\Route;
 use App\Http\Controllers\ChatController;
+use Illuminate\Support\Facades\Route;
 
 Route::view('/', 'welcome'); // Route pour la page d'accueil
 
-Route::view('dashboard', 'dashboard') // Route pour la page dashboard 
+Route::view('dashboard', 'dashboard') // Route pour la page dashboard
     ->middleware(['auth', 'verified']) // Authentification requise
     ->name('dashboard'); // Nom de la route
 
