@@ -8,7 +8,7 @@ use Illuminate\Support\Facades\Log; // Utilisé pour journaliser les événement
 
 /**
  * Contrôleur responsable de la gestion des interactions avec l'API Ollama
- * 
+ *
  * Ce contrôleur gère deux aspects principaux :
  * 1. L'affichage de l'interface de chat avec la liste des modèles disponibles
  * 2. L'envoi des messages utilisateur à Ollama et la récupération des réponses
@@ -17,11 +17,11 @@ class ChatController extends Controller
 {
     /**
      * Affiche la page de chat avec la liste des modèles disponibles
-     * 
+     *
      * Cette méthode est appelée lorsque l'utilisateur accède à la route '/chat'
      * Elle récupère la liste des modèles LLM disponibles via l'API Ollama
      * et les transmet à la vue pour affichage dans un menu déroulant
-     * 
+     *
      * @return \Illuminate\Contracts\View\View La vue 'chat' avec les modèles disponibles
      */
     public function index()
@@ -35,16 +35,16 @@ class ChatController extends Controller
 
     /**
      * Récupère la liste des modèles LLM disponibles via l'API Ollama
-     * 
+     *
      * Cette méthode privée interroge l'endpoint '/api/tags' d'Ollama pour obtenir
      * la liste des modèles LLM téléchargés et disponibles localement.
-     * 
+     *
      * Particularités techniques :
      * - Utilise la configuration depuis config/services.php avec des valeurs par défaut
      * - Le timeout est limité à 5 secondes pour éviter de bloquer l'interface
      * - Gestion complète des erreurs avec journalisation pour faciliter le débogage
      * - Retourne un tableau vide en cas d'échec pour éviter les erreurs dans la vue
-     * 
+     *
      * @return array Liste des modèles disponibles ou tableau vide si erreur
      */
     private function getAvailableModels()
@@ -59,7 +59,7 @@ class ChatController extends Controller
 
             // Journalisation pour faciliter le débogage et le monitoring
             Log::info('Tentative de connexion à Ollama: '.$ollamaUrl);
-            
+
             // Requête HTTP avec timeout court pour éviter de bloquer l'interface utilisateur
             $response = Http::timeout(5)->get($ollamaUrl);
 
@@ -88,19 +88,19 @@ class ChatController extends Controller
 
     /**
      * Envoie un message utilisateur à Ollama et récupère la réponse générée par le LLM
-     * 
+     *
      * Cette méthode est appelée via une requête AJAX depuis l'interface de chat.
      * Elle traite le message de l'utilisateur, le transmet au modèle LLM sélectionné
      * via l'API Ollama, puis renvoie la réponse générée au format JSON.
-     * 
+     *
      * Particularités techniques :
      * - Validation complète des entrées utilisateur pour sécuriser l'API
      * - Paramètres de génération configurables (température, max_tokens)
      * - Timeout plus long (30s) pour permettre aux modèles de générer des réponses complètes
      * - Mode non-streaming pour simplifier la gestion des réponses
      * - Gestion détaillée des erreurs avec codes HTTP appropriés
-     * 
-     * @param Request $request Requête HTTP contenant le message et les paramètres
+     *
+     * @param  Request  $request  Requête HTTP contenant le message et les paramètres
      * @return \Illuminate\Http\JsonResponse Réponse JSON contenant la réponse du LLM ou un message d'erreur
      */
     public function sendMessage(Request $request)
