@@ -6,6 +6,25 @@ use Illuminate\Support\Facades\Auth;
 use function Livewire\Volt\rules;
 use function Livewire\Volt\state;
 
+state(['password' => '']);
+
+rules(['password' => ['required', 'string', 'current_password']]);
+
+$deleteUser = function () {
+    $this->validate();
+
+    $user = Auth::user();
+
+    Auth::logout();
+
+    $user->delete();
+
+    session()->invalidate();
+    session()->regenerateToken();
+
+    $this->redirect('/', navigate: true);
+};
+
 ?>
 
 <section class="space-y-6">
@@ -25,10 +44,7 @@ use function Livewire\Volt\state;
     >{{ __('Delete Account') }}</x-danger-button>
 
     <x-modal name="confirm-user-deletion" :show="$errors->userDeletion->isNotEmpty()" focusable>
-        <form method="POST" action="{{ route('profile.destroy') }}" class="p-6">
-            @csrf
-            @method('DELETE')
-
+        <form wire:submit.prevent="deleteUser" class="p-6">
             <h2 class="text-lg font-medium text-custom-black dark:text-custom-white">
                 {{ __('Are you sure you want to delete your account?') }}
             </h2>
@@ -42,14 +58,14 @@ use function Livewire\Volt\state;
 
                 <x-text-input
                     id="password"
-                    name="password"
+                    wire:model="password"
                     type="password"
                     class="mt-1 block w-3/4 dark:bg-custom-mid-dark-mode dark:text-custom-white"
                     placeholder="{{ __('Password') }}"
                     required
                 />
 
-                <x-input-error :messages="$errors->userDeletion->get('password')" class="mt-2" />
+                <x-input-error :messages="$errors->get('password')" class="mt-2" />
             </div>
 
             <div class="mt-6 flex justify-end">

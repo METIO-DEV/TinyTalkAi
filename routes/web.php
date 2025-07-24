@@ -47,7 +47,7 @@ Route::post('/logout', function () {
 })->middleware('auth')->name('logout');
 
 // Redirection des anciennes routes vers la page d'accueil
-Route::redirect('dashboard', '/');
+Route::redirect('dashboard', '/')->name('dashboard');
 Route::redirect('chat', '/');
 
 require __DIR__.'/auth.php';
