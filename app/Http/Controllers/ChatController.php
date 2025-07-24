@@ -133,7 +133,7 @@ class ChatController extends Controller
 
             // Requête POST vers l'API Ollama avec un timeout plus long (30s)
             // La génération de texte peut prendre du temps selon le modèle et la longueur demandée
-            $response = Http::timeout(30)->post($ollamaUrl, [
+            $response = Http::timeout(60)->post($ollamaUrl, [
                 'model' => $request->input('model'),              // Nom du modèle LLM à utiliser
                 'prompt' => $request->input('message'),           // Message de l'utilisateur
                 'temperature' => (float) $temperature,            // Conversion explicite en float
