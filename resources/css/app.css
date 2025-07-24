@@ -1,3 +1,37 @@
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap');
+
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
+
+@layer base {
+    :root {
+        --color-light: #E0E0E0;
+        --color-white: #FFFFFF;
+        --color-mid: #CDCDCD;
+        --color-black: #000000;
+    }
+    
+    body {
+        font-family: 'Inter', sans-serif;
+    }
+}
+
+@layer components {
+    /* Animation de rotation pour les icônes de la sidebar */
+    [data-collapse-toggle] svg {
+        transition: transform 0.3s ease-in-out;
+    }
+    
+    [data-collapse-toggle] svg.rotate-180 {
+        transform: rotate(180deg);
+    }
+
+    [data-collapse-toggle] svg.rotate-90 {
+        transform: rotate(90deg);
+    }
+    /* Rotation de -90deg */
+    [data-collapse-toggle] svg.rotate--90 {
+        transform: rotate(-90deg);
+    }
+}
