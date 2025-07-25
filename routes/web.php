@@ -15,6 +15,21 @@ Route::post('api/chat', [ChatController::class, 'sendMessage'])
     ->middleware(['auth', 'verified'])
     ->name('api.chat');
 
+// Route pour récupérer l'historique des conversations
+Route::get('api/conversation/{conversationId}', [ChatController::class, 'getConversationHistory'])
+    ->middleware(['auth', 'verified'])
+    ->name('api.conversation.history');
+
+// Route pour récupérer la liste des conversations
+Route::get('api/conversations', [ChatController::class, 'getConversations'])
+    ->middleware(['auth', 'verified'])
+    ->name('api.conversations');
+
+// Route pour supprimer une conversation
+Route::delete('api/conversation/{conversationId}', [ChatController::class, 'deleteConversation'])
+    ->middleware(['auth', 'verified'])
+    ->name('api.conversation.delete');
+
 // Route pour la page profile
 Route::view('profile', 'profile')
     ->middleware(['auth'])

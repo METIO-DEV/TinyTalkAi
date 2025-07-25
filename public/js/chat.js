@@ -18,6 +18,10 @@ document.addEventListener('DOMContentLoaded', function() {
     const tempValue = document.getElementById('temperature');
     const maxTokensSlider = document.getElementById('max-tokens');
     const tokensValue = document.getElementById('tokens-value');
+    const conversationItems = document.querySelectorAll('.conversation-item');
+    
+    // Variable pour stocker l'ID de la conversation actuelle
+    let currentConversationId = null;
     
     // Initialisation des sliders
     if (temperatureSlider) {
@@ -30,6 +34,89 @@ document.addEventListener('DOMContentLoaded', function() {
         maxTokensSlider.addEventListener('input', function() {
             tokensValue.textContent = this.value;
         });
+    }
+    
+    // Initialiser les gestionnaires d'événements pour les éléments de conversation
+    initConversationItemHandlers();
+    
+    // Initialiser le gestionnaire pour le bouton "Nouvelle conversation"
+    initNewConversationButton();
+    
+    // Fonction pour initialiser les gestionnaires d'événements sur les éléments de conversation
+    function initConversationItemHandlers() {
+        const conversationItems = document.querySelectorAll('.conversation-item');
+        conversationItems.forEach(item => {
+            item.addEventListener('click', function() {
+                // Récupérer l'ID de la conversation et le modèle
+                const conversationId = this.dataset.conversationId;
+                const modelName = this.dataset.model;
+                
+                // Sauvegarder l'ID de conversation actuelle
+                currentConversationId = conversationId;
+                
+                // Sélectionner automatiquement le modèle associé à cette conversation
+                localStorage.setItem('selectedModel', modelName);
+                
+                // Mettre à jour l'apparence des boutons de modèle
+                updateModelButtonsAppearance();
+                
+                // Mettre à jour le placeholder du textarea
+                if (chatInput) {
+                    chatInput.placeholder = `Écrivez à ${modelName}...`;
+                }
+                
+                // Activer le formulaire
+                if (chatInput) chatInput.disabled = false;
+                if (sendButton) sendButton.disabled = false;
+                
+                // Charger l'historique de la conversation
+                loadConversationHistory(conversationId);
+                
+                // Mettre en évidence la conversation sélectionnée
+                document.querySelectorAll('.conversation-item').forEach(item => {
+                    item.classList.remove('bg-custom-light-dark-mode');
+                });
+                this.classList.add('bg-custom-light-dark-mode');
+            });
+        });
+    }
+    
+    // Fonction pour initialiser le bouton "Nouvelle conversation"
+    function initNewConversationButton() {
+        const newConversationBtn = document.getElementById('new-conversation-btn');
+        if (newConversationBtn) {
+            newConversationBtn.addEventListener('click', function() {
+                // Réinitialiser l'ID de conversation courante
+                currentConversationId = null;
+                
+                // Effacer les messages précédents
+                if (chatMessages) {
+                    chatMessages.innerHTML = '';
+                }
+                
+                // Mettre à jour l'apparence des éléments de conversation
+                document.querySelectorAll('.conversation-item').forEach(item => {
+                    item.classList.remove('bg-custom-light-dark-mode');
+                });
+                
+                // Activer le formulaire
+                if (chatInput) chatInput.disabled = false;
+                if (sendButton) sendButton.disabled = false;
+                
+                // Récupérer le modèle sélectionné
+                const selectedModel = localStorage.getItem('selectedModel');
+                
+                // Mettre à jour le placeholder
+                if (chatInput && selectedModel) {
+                    chatInput.placeholder = `Écrivez à ${selectedModel}...`;
+                }
+                
+                // Afficher un message de sélection du modèle
+                if (chatMessages && selectedModel) {
+                    showModelSelectionMessage(selectedModel);
+                }
+            });
+        }
     }
     
     // Gestion des sections pliables dans la sidebar avec animation
@@ -102,11 +189,19 @@ document.addEventListener('DOMContentLoaded', function() {
         
         // Utiliser le template pour créer le message de confirmation
         const template = document.getElementById('model-selection-message-template');
-        if (template) {
+        if (!template) {
+            console.warn('Template model-selection-message-template non trouvé');
+            return; // Sortir de la fonction si le template n'existe pas
+        }
+        
+        try {
             const clone = document.importNode(template.content, true);
             
             // Définir le nom du modèle
-            clone.querySelector('.model-name').textContent = selectedModel;
+            const modelNameElement = clone.querySelector('.model-name');
+            if (modelNameElement) {
+                modelNameElement.textContent = selectedModel;
+            }
             
             // Insérer au début du conteneur de messages
             if (chatMessages.firstChild) {
@@ -114,6 +209,8 @@ document.addEventListener('DOMContentLoaded', function() {
             } else {
                 chatMessages.appendChild(clone);
             }
+        } catch (error) {
+            console.error('Erreur lors de l\'affichage du message de sélection du modèle:', error);
         }
     }
     
@@ -137,7 +234,6 @@ document.addEventListener('DOMContentLoaded', function() {
         
         modelButtons.forEach(btn => {
             const isSelected = btn.dataset.model === selectedModel;
-            
             
             // Réinitialiser tous les styles possibles
             btn.classList.remove('bg-custom-white', 'bg-custom-black', 'bg-custom-mid', 'bg-custom-light');
@@ -227,7 +323,29 @@ document.addEventListener('DOMContentLoaded', function() {
         // Gestion du clic
         button.addEventListener('click', function() {
             localStorage.setItem('selectedModel', this.dataset.model);
+            
+            // Réinitialiser l'ID de conversation actuelle lors du changement de modèle
+            currentConversationId = null;
+            
+            // Mettre à jour le placeholder du textarea
+            if (chatInput) {
+                chatInput.placeholder = `Écrivez à ${this.dataset.model}...`;
+            }
+            
+            // Effacer les messages précédents
+            if (chatMessages) {
+                chatMessages.innerHTML = '';
+            }
+            
+            // Mettre à jour l'apparence des boutons
             updateModelButtonsAppearance();
+            
+            // Afficher le message de confirmation
+            showModelSelectionMessage(this.dataset.model);
+            
+            // Activer le formulaire
+            if (chatInput) chatInput.disabled = false;
+            if (sendButton) sendButton.disabled = false;
         });
         
         // Gestion du survol
@@ -248,121 +366,54 @@ document.addEventListener('DOMContentLoaded', function() {
         });
     });
 
-    // Gestion du bouton d'envoi
-    sendButton.addEventListener('mouseenter', function() {
-        // scaler le bouton
-        this.style.transform = 'scale(1.1)';
-    });
-    
-    sendButton.addEventListener('mouseleave', function() {
-        this.style.transform = 'scale(1)';
-    });
-    
-    // Sélectionner un modèle par défaut si aucun n'est sélectionné
-    if (!localStorage.getItem('selectedModel') && modelButtons.length > 0) {
-        // Sélectionner le premier modèle par défaut
-        const defaultModel = modelButtons[0].dataset.model;
-        localStorage.setItem('selectedModel', defaultModel);
-    }
-    
-    // Initialiser l'apparence des boutons au chargement de la page
-    updateModelButtonsAppearance();
-
-    // Gestion du textarea pour les retours à la ligne
-    if (chatInput) {
-        // Ajuster automatiquement la hauteur du textarea en fonction du contenu
-        function adjustTextareaHeight() {
-            chatInput.style.height = 'auto';
-            chatInput.style.height = Math.min(chatInput.scrollHeight, 200) + 'px';
+    // Fonction pour charger l'historique d'une conversation
+    function loadConversationHistory(conversationId) {
+        // Effacer les messages précédents
+        if (chatMessages) {
+            chatMessages.innerHTML = '';
         }
         
-        // Appliquer l'ajustement lors de la saisie
-        chatInput.addEventListener('input', adjustTextareaHeight);
+        // Afficher un message de chargement
+        const loadingId = 'loading-history-' + Date.now();
+        addLoadingMessage(loadingId);
         
-        // Gérer l'envoi avec Entrée (mais permettre Shift+Entrée pour les retours à la ligne)
-        chatInput.addEventListener('keydown', function(e) {
-            if (e.key === 'Enter' && !e.shiftKey) {
-                e.preventDefault();
-                if (this.value.trim() !== '') {
-                    chatForm.dispatchEvent(new Event('submit'));
-                }
-            }
-        });
-        
-        // Initialiser la hauteur au chargement
-        setTimeout(adjustTextareaHeight, 0);
-    }
-    
-    // Envoi du message
-    if (chatForm) {
-        chatForm.addEventListener('submit', function(e) {
-            e.preventDefault();
-            
-            const selectedModel = localStorage.getItem('selectedModel');
-            
-            if (!selectedModel || !chatInput.value.trim()) return;
-            
-            const userMessage = chatInput.value.trim();
-            
-            // Ajouter le message de l'utilisateur
-            addUserMessage(userMessage);
-            
-            // Vider l'input et désactiver le formulaire pendant l'envoi
-            chatInput.value = '';
-            chatInput.disabled = true;
-            sendButton.disabled = true;
-            
-            // Ajouter un message de chargement
-            const loadingMessageId = 'loading-' + Date.now();
-            addLoadingMessage(loadingMessageId);
-            
-            // Envoyer la requête au serveur
-            fetch('/api/chat', {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                    'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]').getAttribute('content')
-                },
-                body: JSON.stringify({
-                    message: userMessage,
-                    model: selectedModel,
-                    temperature: parseFloat(temperatureSlider ? temperatureSlider.value : 0.7),
-                    max_tokens: parseInt(maxTokensSlider ? maxTokensSlider.value : 1024)
-                })
-            })
+        // Récupérer l'historique de la conversation
+        fetch(`/api/conversation/${conversationId}`)
             .then(response => response.json())
             .then(data => {
                 // Supprimer le message de chargement
-                const loadingElement = document.getElementById(loadingMessageId);
+                const loadingElement = document.getElementById(loadingId);
                 if (loadingElement) {
                     loadingElement.remove();
                 }
                 
-                if (data.success) {
-                    // Ajouter la réponse du modèle
-                    addAIMessage(data.response);
+                if (data.success && data.messages) {
+                    // Afficher chaque message de l'historique
+                    data.messages.forEach(message => {
+                        if (message.role === 'user') {
+                            addUserMessage(message.content);
+                        } else if (message.role === 'assistant') {
+                            addAIMessage(message.content, false); // false = pas d'animation
+                        }
+                    });
+                    
+                    // Faire défiler vers le bas
+                    chatMessages.scrollTop = chatMessages.scrollHeight;
                 } else {
-                    // Afficher l'erreur
-                    addErrorMessage(data.error || 'Une erreur est survenue');
+                    addErrorMessage('Erreur lors du chargement de l\'historique');
                 }
             })
             .catch(error => {
+                console.error('Error:', error);
+                
                 // Supprimer le message de chargement
-                const loadingElement = document.getElementById(loadingMessageId);
+                const loadingElement = document.getElementById(loadingId);
                 if (loadingElement) {
                     loadingElement.remove();
                 }
                 
-                // Afficher l'erreur
-                addErrorMessage('Erreur de communication avec le serveur');
-                console.error('Error:', error);
-            })
-            .finally(() => {
-                // Réactiver le formulaire
-                chatInput.disabled = false;
-                sendButton.disabled = false;
+                addErrorMessage('Erreur lors du chargement de l\'historique');
             });
-        });
     }
     
     // Fonction pour ajouter un message utilisateur
@@ -382,7 +433,7 @@ document.addEventListener('DOMContentLoaded', function() {
     }
     
     // Fonction pour ajouter un message AI
-    function addAIMessage(content) {
+    function addAIMessage(content, animate = true) {
         if (!chatMessages) return;
         
         const template = document.getElementById('ai-message-template');
@@ -393,7 +444,7 @@ document.addEventListener('DOMContentLoaded', function() {
             // Vérifier si l'animation de typing est activée
             const typingAnimationEnabled = true; // Par défaut activé, on retirera le paramètre plus tard
             
-            if (!typingAnimationEnabled) {
+            if (!typingAnimationEnabled || !animate) {
                 // Si l'animation est désactivée, afficher le message directement
                 messageContentElement.textContent = content;
                 chatMessages.appendChild(clone);
@@ -418,6 +469,22 @@ document.addEventListener('DOMContentLoaded', function() {
             
             // Préserver le style white-space: pre-wrap pendant l'animation
             addedMessage.style.whiteSpace = 'pre-wrap';
+            
+            // Variable pour suivre si l'utilisateur a scrollé manuellement
+            let userHasScrolled = false;
+            
+            // Gestionnaire d'événement pour détecter le scroll manuel
+            const scrollHandler = function() {
+                // Si l'utilisateur n'est pas tout en bas, marquer comme scrollé manuellement
+                if (chatMessages.scrollTop + chatMessages.clientHeight < chatMessages.scrollHeight - 10) {
+                    userHasScrolled = true;
+                } else {
+                    userHasScrolled = false;
+                }
+            };
+            
+            // Ajouter l'écouteur d'événement pour le scroll
+            chatMessages.addEventListener('scroll', scrollHandler);
             
             // Simuler l'effet de typing caractère par caractère
             let currentText = '';
@@ -493,18 +560,333 @@ document.addEventListener('DOMContentLoaded', function() {
     
     // Fonction pour ajouter un message d'erreur
     function addErrorMessage(errorText) {
-        if (!chatMessages) return;
+        const chatMessagesElement = document.getElementById('chat-messages');
+        if (!chatMessagesElement) {
+            console.warn('Élément chat-messages non trouvé');
+            return;
+        }
         
-        const template = document.getElementById('error-message-template');
-        if (template) {
+        try {
+            const template = document.getElementById('error-message-template');
+            if (!template) {
+                console.warn('Template error-message-template non trouvé');
+                // Fallback si le template n'existe pas
+                const errorDiv = document.createElement('div');
+                errorDiv.className = 'flex justify-center mb-4';
+                errorDiv.innerHTML = `<div class="bg-red-100 border border-red-400 text-red-700 rounded-lg py-2 px-4 max-w-[80%]">
+                    <div class="whitespace-pre-wrap">${errorText}</div>
+                </div>`;
+                chatMessagesElement.appendChild(errorDiv);
+                return;
+            }
+            
             const clone = document.importNode(template.content, true);
             
-            clone.querySelector('.message-content').textContent = errorText;
-            chatMessages.appendChild(clone);
+            const messageContent = clone.querySelector('.message-content');
+            if (messageContent) {
+                messageContent.textContent = errorText;
+            }
+            
+            chatMessagesElement.appendChild(clone);
             
             // Faire défiler vers le bas
-            chatMessages.scrollTop = chatMessages.scrollHeight;
+            chatMessagesElement.scrollTop = chatMessagesElement.scrollHeight;
+        } catch (error) {
+            console.error('Erreur lors de l\'affichage du message d\'erreur:', error);
+            // Ne pas propager l'erreur pour éviter une boucle infinie
         }
+    }
+    
+    // Gestion du bouton d'envoi
+    sendButton.addEventListener('mouseenter', function() {
+        // scaler le bouton
+        this.style.transform = 'scale(1.1)';
+    });
+    
+    sendButton.addEventListener('mouseleave', function() {
+        this.style.transform = 'scale(1)';
+    });
+    
+    // Sélectionner un modèle par défaut si aucun n'est sélectionné
+    if (!localStorage.getItem('selectedModel') && modelButtons.length > 0) {
+        // Sélectionner le premier modèle par défaut
+        const defaultModel = modelButtons[0].dataset.model;
+        localStorage.setItem('selectedModel', defaultModel);
+    }
+    
+    // Initialiser l'apparence des boutons au chargement de la page
+    updateModelButtonsAppearance();
+
+    // Gestion du textarea pour les retours à la ligne
+    if (chatInput) {
+        // Ajuster automatiquement la hauteur du textarea en fonction du contenu
+        function adjustTextareaHeight() {
+            chatInput.style.height = 'auto';
+            chatInput.style.height = Math.min(chatInput.scrollHeight, 200) + 'px';
+        }
+        
+        // Appliquer l'ajustement lors de la saisie
+        chatInput.addEventListener('input', adjustTextareaHeight);
+        
+        // Gérer l'envoi avec Entrée (mais permettre Shift+Entrée pour les retours à la ligne)
+        chatInput.addEventListener('keydown', function(e) {
+            if (e.key === 'Enter' && !e.shiftKey) {
+                e.preventDefault();
+                if (this.value.trim() !== '') {
+                    chatForm.dispatchEvent(new Event('submit'));
+                }
+            }
+        });
+        
+        // Initialiser la hauteur au chargement
+        setTimeout(adjustTextareaHeight, 0);
+    }
+    
+    // Envoi du message
+    if (chatForm) {
+        chatForm.addEventListener('submit', function(e) {
+            e.preventDefault();
+            
+            const selectedModel = localStorage.getItem('selectedModel');
+            
+            if (!selectedModel || !chatInput.value.trim()) return;
+            
+            // Récupérer le message et le vider
+            const message = chatInput.value.trim();
+            chatInput.value = '';
+            adjustTextareaHeight();
+            
+            // Désactiver le formulaire pendant l'envoi
+            chatInput.disabled = true;
+            sendButton.disabled = true;
+            
+            // Ajouter le message de l'utilisateur
+            addUserMessage(message);
+            
+            // Ajouter un message de chargement
+            const loadingMessageId = 'loading-' + Date.now();
+            addLoadingMessage(loadingMessageId);
+            
+            // Envoyer la requête au backend Laravel (pas directement à Ollama)
+            fetch('/api/chat', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]').getAttribute('content')
+                },
+                body: JSON.stringify({
+                    message: message,
+                    model: selectedModel,
+                    conversation_id: currentConversationId ? currentConversationId : null,
+                    temperature: parseFloat(temperatureSlider ? temperatureSlider.value : 0.7),
+                    max_tokens: parseInt(maxTokensSlider ? maxTokensSlider.value : 1024)
+                })
+            })
+            .then(async response => {
+                // Vérifier si la réponse est OK avant de parser le JSON
+                if (!response.ok) {
+                    return response.text().then(text => {
+                        throw new Error(`Erreur serveur (${response.status}): ${text}`);
+                    });
+                }
+                return response.json();
+            })
+            .then(data => {
+                // Supprimer le message de chargement
+                const loadingElement = document.getElementById(loadingMessageId);
+                if (loadingElement) {
+                    loadingElement.remove();
+                }
+                
+                if (data.success) {
+                    // Ajouter la réponse de l'IA
+                    addAIMessage(data.response);
+                    
+                    // Mettre à jour l'ID de conversation si c'est une nouvelle conversation
+                    if (data.conversation_id && !currentConversationId) {
+                        currentConversationId = data.conversation_id;
+                        
+                        // Au lieu de recharger la page, ajouter dynamiquement la conversation à la liste
+                        const historySection = document.getElementById('history-section');
+                        if (historySection) {
+                            // Créer un nouvel élément de conversation
+                            const newConversationItem = document.createElement('div');
+                            newConversationItem.className = 'conversation-item px-3 py-2 rounded-md hover:bg-custom-light-dark-mode cursor-pointer transition-colors duration-200 bg-custom-light-dark-mode';
+                            newConversationItem.dataset.conversationId = data.conversation_id;
+                            newConversationItem.dataset.model = localStorage.getItem('selectedModel');
+                            
+                            // Titre de la conversation (utiliser le début du message)
+                            const title = message.length > 30 ? message.substring(0, 30) + '...' : message;
+                            
+                            // Contenu de l'élément de conversation
+                            newConversationItem.innerHTML = `
+                                <div class="text-sm text-custom-black dark:text-custom-white font-medium truncate">
+                                    ${title}
+                                </div>
+                                <div class="text-xs text-gray-500 dark:text-gray-400">
+                                    ${localStorage.getItem('selectedModel')}
+                                </div>
+                            `;
+                            
+                            // Ajouter l'événement de clic
+                            newConversationItem.addEventListener('click', function() {
+                                // Récupérer l'ID de la conversation et le modèle
+                                const conversationId = this.dataset.conversationId;
+                                const modelName = this.dataset.model;
+                                
+                                // Mettre à jour l'apparence des éléments de conversation
+                                document.querySelectorAll('.conversation-item').forEach(item => {
+                                    item.classList.remove('bg-custom-light-dark-mode');
+                                });
+                                this.classList.add('bg-custom-light-dark-mode');
+                                
+                                // Mettre à jour le modèle sélectionné
+                                if (modelName) {
+                                    localStorage.setItem('selectedModel', modelName);
+                                    updateModelButtonsAppearance();
+                                }
+                                
+                                // Charger l'historique de la conversation
+                                loadConversationHistory(conversationId);
+                                
+                                // Mettre à jour l'ID de conversation courante
+                                currentConversationId = conversationId;
+                            });
+                            
+                            // Insérer le nouvel élément au début de la liste
+                            // const emptyMessage = historySection.querySelector('.text-gray-500');
+                            // if (emptyMessage) {
+                            //     // Remplacer le message "Aucune conversation enregistrée"
+                            //     historySection.removeChild(emptyMessage);
+                            // }
+                            // /Bug : la méthode choisie (removeChild) suppose que le nœud est enfant direct ; quand ce n’est pas le cas, d’où l’exception.
+                            
+                            // Insérer après le bouton "Nouvelle conversation" s'il existe
+                            const newConversationButton = historySection.querySelector('.flex.items-center');
+                            if (newConversationButton) {
+                                historySection.insertBefore(newConversationItem, newConversationButton.nextSibling);
+                            } else {
+                                historySection.insertBefore(newConversationItem, historySection.firstChild);
+                            }
+                        }
+                    }
+                    
+                    // Si c'est une nouvelle conversation, mettre à jour l'historique
+                    if (data.is_new_conversation) {
+                        updateConversationHistory();
+                    }
+                } else {
+                    // Afficher le message d'erreur
+                    addErrorMessage(data.error || 'Une erreur est survenue');
+                }
+            })
+            .catch(error => {
+                // Gérer les erreurs
+                console.error('Error:', error);
+                
+                // Supprimer le message de chargement s'il existe encore
+                const loadingElement = document.getElementById(loadingMessageId);
+                if (loadingElement) {
+                    loadingElement.remove();
+                }
+                
+                // Afficher un message d'erreur plus détaillé
+                addErrorMessage(error.message || 'Erreur de communication avec le serveur');
+                
+                // Vérifier si la conversation a été créée malgré l'erreur
+                if (currentConversationId) {
+                    console.log('Une conversation existe déjà (ID: ' + currentConversationId + '), mise à jour de l\'historique');
+                    updateConversationHistory();
+                }
+            })
+            .finally(() => {
+                // Réactiver le formulaire
+                const chatInputElement = document.getElementById('chat-input');
+                const sendButtonElement = document.getElementById('send-button');
+                
+                if (chatInputElement) chatInputElement.disabled = false;
+                if (sendButtonElement) sendButtonElement.disabled = false;
+            });
+        });
+    }
+    
+    // Fonction pour mettre à jour l'historique des conversations
+    function updateConversationHistory() {
+        // Récupérer l'historique des conversations via une requête AJAX
+        fetch('/api/conversations')
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    // Récupérer la section d'historique
+                    const historySection = document.getElementById('history-section');
+                    if (!historySection) return;
+                    
+                    // Vider l'historique actuel
+                    historySection.innerHTML = '';
+                    
+                    // Si aucune conversation, afficher un message
+                    if (data.conversations.length === 0) {
+                        const emptyMessage = document.createElement('div');
+                        emptyMessage.className = 'text-sm text-gray-500 dark:text-gray-300 px-3 py-2';
+                        emptyMessage.textContent = 'Aucune conversation enregistrée';
+                        historySection.appendChild(emptyMessage);
+                        return;
+                    }
+                    
+                    // Ajouter chaque conversation à l'historique
+                    data.conversations.forEach(conversation => {
+                        const conversationItem = document.createElement('div');
+                        conversationItem.className = 'conversation-item px-3 py-2 rounded-md hover:bg-custom-light-dark-mode cursor-pointer transition-colors duration-200';
+                        conversationItem.dataset.conversationId = conversation.id;
+                        conversationItem.dataset.model = conversation.model_name;
+                        
+                        // Ajouter la classe active si c'est la conversation courante
+                        if (conversation.id == currentConversationId) {
+                            conversationItem.classList.add('bg-custom-light-dark-mode');
+                        }
+                        
+                        conversationItem.innerHTML = `
+                            <div class="text-sm text-custom-black dark:text-custom-white font-medium truncate">
+                                ${conversation.title || 'Conversation du ' + new Date(conversation.created_at).toLocaleDateString()}
+                            </div>
+                            <div class="text-xs text-gray-500 dark:text-gray-400">
+                                ${conversation.model_name}
+                            </div>
+                        `;
+                        
+                        // Ajouter l'événement de clic
+                        conversationItem.addEventListener('click', function() {
+                            // Récupérer l'ID de la conversation et le modèle
+                            const conversationId = this.dataset.conversationId;
+                            const modelName = this.dataset.model;
+                            
+                            // Mettre à jour l'apparence des éléments de conversation
+                            document.querySelectorAll('.conversation-item').forEach(item => {
+                                item.classList.remove('bg-custom-light-dark-mode');
+                            });
+                            this.classList.add('bg-custom-light-dark-mode');
+                            
+                            // Mettre à jour le modèle sélectionné
+                            if (modelName) {
+                                localStorage.setItem('selectedModel', modelName);
+                                updateModelButtonsAppearance();
+                            }
+                            
+                            // Charger l'historique de la conversation
+                            loadConversationHistory(conversationId);
+                            
+                            // Mettre à jour l'ID de conversation courante
+                            currentConversationId = conversationId;
+                        });
+                        
+                        // Ajouter l'élément à la section d'historique
+                        historySection.appendChild(conversationItem);
+                    });
+                }
+            })
+            .catch(error => {
+                console.error('Erreur lors de la récupération de l\'historique des conversations:', error);
+            });
     }
 });
 

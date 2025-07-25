@@ -20,7 +20,7 @@
     <div class="min-h-screen flex">
         <!-- Sidebar -->
         <div class="w-1/5 shrink-0 h-screen overflow-hidden ">
-            <x-sidebar :models="$models" :temperature="0.7" :maxTokens="1024" />
+            <x-sidebar :models="$models" :conversations="$conversations" :temperature="0.7" :maxTokens="1024" />
         </div>
         
         <!-- Chat main area -->

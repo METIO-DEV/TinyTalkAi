@@ -2,9 +2,13 @@
 
 namespace App\Http\Controllers;
 
+use App\Models\AIModel;
+use App\Models\Conversation;
+use App\Models\Message;
 use Illuminate\Http\Request;
-use Illuminate\Support\Facades\Http; // Utilisé pour faire des requêtes HTTP vers l'API Ollama
-use Illuminate\Support\Facades\Log; // Utilisé pour journaliser les événements et faciliter le débogage
+use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\Http;
+use Illuminate\Support\Facades\Log;
 
 /**
  * Contrôleur responsable de la gestion des interactions avec l'API Ollama
@@ -29,8 +33,19 @@ class ChatController extends Controller
         // Récupérer la liste des modèles disponibles via Ollama
         $models = $this->getAvailableModels();
 
-        // Passer les modèles à la vue pour affichage dans le sélecteur
-        return view('chat', ['models' => $models]);
+        // Récupérer les conversations de l'utilisateur connecté
+        $conversations = [];
+        if (auth()->check()) {
+            $conversations = Conversation::where('user_id', auth()->id())
+                ->orderBy('updated_at', 'desc')
+                ->get();
+        }
+
+        // Passer les modèles et les conversations à la vue
+        return view('chat', [
+            'models' => $models,
+            'conversations' => $conversations,
+        ]);
     }
 
     /**
@@ -87,90 +102,248 @@ class ChatController extends Controller
     }
 
     /**
+     * Synchronise les modèles disponibles avec la base de données
+     *
+     * @param  array  $ollamaModels  Liste des modèles récupérés depuis Ollama
+     * @return void
+     */
+    private function syncModelsWithDatabase($ollamaModels)
+    {
+        try {
+            if (empty($ollamaModels)) {
+                return;
+            }
+
+            // Marquer tous les modèles comme inactifs
+            AIModel::query()->update(['is_active' => false]);
+
+            foreach ($ollamaModels as $model) {
+                // Chercher si le modèle existe déjà
+                $aiModel = AIModel::where('full_name', $model['name'])->first();
+
+                if ($aiModel) {
+                    // Mettre à jour le modèle existant
+                    $aiModel->update([
+                        'is_active' => true,
+                        'size' => $model['size'] ?? null,
+                        'last_synced_at' => now(),
+                    ]);
+                } else {
+                    // Créer un nouveau modèle
+                    $nameParts = explode(':', $model['name']);
+                    $name = $nameParts[0];
+
+                    AIModel::create([
+                        'name' => $name,
+                        'full_name' => $model['name'],
+                        'size' => $model['size'] ?? null,
+                        'is_active' => true,
+                        'last_synced_at' => now(),
+                    ]);
+                }
+            }
+
+            Log::info('Synchronisation des modèles réussie');
+        } catch (\Exception $e) {
+            Log::error('Erreur lors de la synchronisation des modèles: '.$e->getMessage());
+        }
+    }
+
+    /**
      * Envoie un message utilisateur à Ollama et récupère la réponse générée par le LLM
      *
      * Cette méthode est appelée via une requête AJAX depuis l'interface de chat.
-     * Elle traite le message de l'utilisateur, le transmet au modèle LLM sélectionné
-     * via l'API Ollama, puis renvoie la réponse générée au format JSON.
-     *
-     * Particularités techniques :
-     * - Validation complète des entrées utilisateur pour sécuriser l'API
-     * - Paramètres de génération configurables (température, max_tokens)
-     * - Timeout plus long (30s) pour permettre aux modèles de générer des réponses complètes
-     * - Mode non-streaming pour simplifier la gestion des réponses
-     * - Gestion détaillée des erreurs avec codes HTTP appropriés
+     * Elle valide les entrées, envoie le message à Ollama, et sauvegarde la conversation en BDD.
      *
      * @param  Request  $request  Requête HTTP contenant le message et les paramètres
      * @return \Illuminate\Http\JsonResponse Réponse JSON contenant la réponse du LLM ou un message d'erreur
      */
     public function sendMessage(Request $request)
     {
-        // Validation des entrées utilisateur pour sécuriser l'API
-        // Ces règles garantissent que les paramètres sont du bon type et dans les limites acceptables
+        // Valider les données d'entrée
         $request->validate([
-            'message' => 'required|string',            // Le message ne peut pas être vide
-            'model' => 'required|string',             // Le nom du modèle LLM à utiliser
-            'temperature' => 'numeric|min:0|max:2',    // Contrôle la créativité/aléa des réponses
-            'max_tokens' => 'integer|min:1|max:4096',  // Limite la longueur de la réponse
+            'message' => 'required|string',
+            'model' => 'required|string',
+            'temperature' => 'nullable|numeric|min:0|max:2',
+            'max_tokens' => 'nullable|integer|min:1|max:32768',
+            'conversation_id' => 'nullable|integer|exists:conversations,id',
         ]);
 
-        // Récupération des paramètres avec valeurs par défaut si non spécifiés
-        // 0.7 est une température équilibrée entre cohérence et créativité
+        // Récupérer les paramètres
         $temperature = $request->input('temperature', 0.7);
-        // 1024 tokens est une longueur raisonnable pour la plupart des réponses
         $maxTokens = $request->input('max_tokens', 1024);
+        $settings = [
+            'temperature' => $temperature,
+            'max_tokens' => $maxTokens,
+        ];
+
+        // Variable pour indiquer si c'est une nouvelle conversation
+        $isNewConversation = false;
+
+        // Gérer la conversation si l'utilisateur est authentifié
+        $conversation = null;
+        if (Auth::check()) {
+            // Récupérer la conversation existante ou en créer une nouvelle
+            if ($request->has('conversation_id')) {
+                $conversation = Conversation::where('id', $request->input('conversation_id'))
+                    ->where('user_id', Auth::id())
+                    ->first();
+            }
+
+            if (! $conversation) {
+                // Créer une nouvelle conversation
+                $conversation = Conversation::create([
+                    'user_id' => Auth::id(),
+                    'title' => substr($request->input('message'), 0, 50).'...', // Utiliser le début du message comme titre
+                    'model_name' => $request->input('model'),
+                ]);
+
+                // Marquer comme nouvelle conversation
+                $isNewConversation = true;
+            }
+
+            // Sauvegarder le message de l'utilisateur
+            Message::create([
+                'conversation_id' => $conversation->id,
+                'role' => 'user',
+                'content' => $request->input('message'),
+                'settings' => $settings,
+            ]);
+        }
 
         try {
-            // Configuration de l'URL de l'API Ollama pour la génération de texte
-            // Même logique que dans getAvailableModels() pour la compatibilité Docker
+            // Configuration de l'URL de l'API Ollama
             $ollamaHost = config('services.ollama.host', 'host.docker.internal');
             $ollamaPort = config('services.ollama.port', '11434');
-            $ollamaUrl = 'http://'.$ollamaHost.':'.$ollamaPort.'/api/generate'; // Endpoint de génération
+            $ollamaUrl = 'http://'.$ollamaHost.':'.$ollamaPort.'/api/generate';
 
-            // Journalisation détaillée pour le monitoring et le débogage
             Log::info('Envoi d\'une requête à Ollama: '.$ollamaUrl);
             Log::info('Modèle: '.$request->input('model').', Température: '.$temperature.', Max tokens: '.$maxTokens);
 
-            // Requête POST vers l'API Ollama avec un timeout plus long (30s)
-            // La génération de texte peut prendre du temps selon le modèle et la longueur demandée
+            // Requête POST vers l'API Ollama
             $response = Http::timeout(60)->post($ollamaUrl, [
-                'model' => $request->input('model'),              // Nom du modèle LLM à utiliser
-                'prompt' => $request->input('message'),           // Message de l'utilisateur
-                'temperature' => (float) $temperature,            // Conversion explicite en float
-                'max_tokens' => (int) $maxTokens,                // Conversion explicite en integer
-                'stream' => false,                               // Mode non-streaming pour simplifier la gestion
+                'model' => $request->input('model'),
+                'prompt' => $request->input('message'),
+                'temperature' => (float) $temperature,
+                'max_tokens' => (int) $maxTokens,
+                'stream' => false,
             ]);
 
-            // Vérification du succès de la requête (code 2xx)
             if ($response->successful()) {
                 Log::info('Réponse reçue d\'Ollama avec succès');
 
-                // Renvoi de la réponse au format JSON pour traitement côté client
-                // L'API Ollama renvoie le texte généré sous la clé 'response'
+                $aiResponse = $response->json('response');
+
+                // Sauvegarder la réponse de l'assistant
+                if (Auth::check() && $conversation) {
+                    Message::create([
+                        'conversation_id' => $conversation->id,
+                        'role' => 'assistant',
+                        'content' => $aiResponse,
+                        'settings' => $settings,
+                    ]);
+                }
+
                 return response()->json([
                     'success' => true,
-                    'response' => $response->json('response'),  // Extraction du texte généré
+                    'response' => $aiResponse,
+                    'conversation_id' => $conversation ? $conversation->id : null,
+                    'is_new_conversation' => $isNewConversation,
                 ]);
             }
 
-            // Journalisation détaillée en cas d'échec
             Log::error('Échec de la communication avec Ollama: '.$response->status());
-            Log::error($response->body());  // Journalisation du corps complet pour débogage
+            Log::error($response->body());
 
-            // Renvoi d'une erreur 500 avec message explicatif
             return response()->json([
                 'success' => false,
                 'error' => 'Erreur lors de la communication avec Ollama: '.$response->status(),
-            ], 500);  // Code 500 pour indiquer une erreur serveur
+            ], 500);
         } catch (\Exception $e) {
-            // Capture de toutes les exceptions possibles (réseau, timeout, etc.)
             Log::error('Erreur lors de l\'envoi du message à Ollama: '.$e->getMessage());
 
-            // Renvoi d'une erreur 500 avec le message d'exception
             return response()->json([
                 'success' => false,
                 'error' => 'Erreur lors de la communication avec Ollama: '.$e->getMessage(),
             ], 500);
         }
+    }
+
+    /**
+     * Récupère l'historique des messages d'une conversation
+     *
+     * @param  int  $conversationId  ID de la conversation
+     * @return \Illuminate\Http\JsonResponse
+     */
+    public function getConversationHistory($conversationId)
+    {
+        if (! Auth::check()) {
+            return response()->json(['error' => 'Utilisateur non authentifié'], 401);
+        }
+
+        $conversation = Conversation::where('id', $conversationId)
+            ->where('user_id', Auth::id())
+            ->with('messages')
+            ->first();
+
+        if (! $conversation) {
+            return response()->json(['error' => 'Conversation non trouvée'], 404);
+        }
+
+        return response()->json([
+            'success' => true,
+            'conversation' => $conversation,
+            'messages' => $conversation->messages,
+        ]);
+    }
+
+    /**
+     * Récupère la liste des conversations de l'utilisateur
+     *
+     * @return \Illuminate\Http\JsonResponse
+     */
+    public function getConversations()
+    {
+        if (! Auth::check()) {
+            return response()->json(['error' => 'Utilisateur non authentifié'], 401);
+        }
+
+        $conversations = Conversation::where('user_id', Auth::id())
+            ->orderBy('updated_at', 'desc')
+            ->get();
+
+        return response()->json([
+            'success' => true,
+            'conversations' => $conversations,
+        ]);
+    }
+
+    /**
+     * Supprime une conversation et tous ses messages associés
+     *
+     * @param  int  $conversationId  ID de la conversation à supprimer
+     * @return \Illuminate\Http\JsonResponse
+     */
+    public function deleteConversation($conversationId)
+    {
+        if (! Auth::check()) {
+            return response()->json(['error' => 'Utilisateur non authentifié'], 401);
+        }
+
+        $conversation = Conversation::where('id', $conversationId)
+            ->where('user_id', Auth::id())
+            ->first();
+
+        if (! $conversation) {
+            return response()->json(['error' => 'Conversation non trouvée ou accès non autorisé'], 404);
+        }
+
+        // Suppression de la conversation (les messages seront supprimés automatiquement si la relation est configurée avec onDelete cascade)
+        $conversation->delete();
+
+        return response()->json([
+            'success' => true,
+            'message' => 'Conversation supprimée avec succès',
+        ]);
     }
 }
