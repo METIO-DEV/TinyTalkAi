@@ -5,6 +5,7 @@ namespace App\Http\Controllers;
 use App\Models\AIModel;
 use App\Models\Conversation;
 use App\Models\Message;
+use App\Services\ConversationMemoryService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Http;
@@ -19,6 +20,21 @@ use Illuminate\Support\Facades\Log;
  */
 class ChatController extends Controller
 {
+    /**
+     * Service de gestion de la mémoire conversationnelle
+     */
+    protected ConversationMemoryService $memoryService;
+    
+    /**
+     * Constructeur du contrôleur
+     * 
+     * @param ConversationMemoryService $memoryService Service de mémoire conversationnelle
+     */
+    public function __construct(ConversationMemoryService $memoryService)
+    {
+        $this->memoryService = $memoryService;
+    }
+
     /**
      * Affiche la page de chat avec la liste des modèles disponibles
      *
@@ -160,79 +176,98 @@ class ChatController extends Controller
      */
     public function sendMessage(Request $request)
     {
-        // Valider les données d'entrée
-        $request->validate([
-            'message' => 'required|string',
-            'model' => 'required|string',
-            'temperature' => 'nullable|numeric|min:0|max:2',
-            'max_tokens' => 'nullable|integer|min:1|max:32768',
-            'conversation_id' => 'nullable|integer|exists:conversations,id',
-        ]);
-
-        // Récupérer les paramètres
-        $temperature = $request->input('temperature', 0.7);
-        $maxTokens = $request->input('max_tokens', 1024);
-        $settings = [
-            'temperature' => $temperature,
-            'max_tokens' => $maxTokens,
-        ];
-
-        // Variable pour indiquer si c'est une nouvelle conversation
-        $isNewConversation = false;
-
-        // Gérer la conversation si l'utilisateur est authentifié
-        $conversation = null;
-        if (Auth::check()) {
-            // Récupérer la conversation existante ou en créer une nouvelle
-            if ($request->has('conversation_id')) {
-                $conversation = Conversation::where('id', $request->input('conversation_id'))
-                    ->where('user_id', Auth::id())
-                    ->first();
-            }
-
-            if (! $conversation) {
-                // Créer une nouvelle conversation
-                $conversation = Conversation::create([
-                    'user_id' => Auth::id(),
-                    'title' => substr($request->input('message'), 0, 50).'...', // Utiliser le début du message comme titre
-                    'model_name' => $request->input('model'),
-                ]);
-
-                // Marquer comme nouvelle conversation
-                $isNewConversation = true;
-            }
-
-            // Sauvegarder le message de l'utilisateur
-            Message::create([
-                'conversation_id' => $conversation->id,
-                'role' => 'user',
-                'content' => $request->input('message'),
-                'settings' => $settings,
-            ]);
-        }
-
         try {
-            // Configuration de l'URL de l'API Ollama
+            // Validation des données d'entrée
+            $request->validate([
+                'message' => 'required|string',
+                'model' => 'required|string',
+                'temperature' => 'required|numeric|min:0|max:2',
+                'max_tokens' => 'required|integer|min:10|max:4096',
+                'conversation_id' => 'nullable|integer|exists:conversations,id',
+            ]);
+
+            // Récupération des paramètres
+            $userMessage = $request->input('message');
+            $modelName = $request->input('model');
+            $temperature = $request->input('temperature');
+            $maxTokens = $request->input('max_tokens');
+            $conversationId = $request->input('conversation_id');
+
+            // Paramètres pour l'API Ollama
+            $settings = [
+                'model' => $modelName,
+                'temperature' => $temperature,
+                'max_tokens' => $maxTokens,
+            ];
+
+            // Gestion de la conversation
+            $conversation = null;
+            $isNewConversation = false;
+
+            if (Auth::check()) {
+                if ($conversationId) {
+                    // Récupérer une conversation existante
+                    $conversation = Conversation::where('id', $conversationId)
+                        ->where('user_id', Auth::id())
+                        ->first();
+                }
+
+                if (! $conversation) {
+                    // Créer une nouvelle conversation
+                    $conversation = Conversation::create([
+                        'user_id' => Auth::id(),
+                        'title' => substr($userMessage, 0, 50).(strlen($userMessage) > 50 ? '...' : ''),
+                        'model_name' => $modelName,
+                    ]);
+                    $isNewConversation = true;
+                }
+
+                // Sauvegarder le message de l'utilisateur
+                Message::create([
+                    'conversation_id' => $conversation->id,
+                    'role' => 'user',
+                    'content' => $userMessage,
+                    'settings' => $settings,
+                ]);
+            }
+
+            // Récupérer la fenêtre locale (contexte des messages précédents)
+            $messages = [];
+            if ($conversation) {
+                $messages = $this->memoryService->getLocalWindow($conversation->id);
+            } else {
+                // Si pas de conversation (utilisateur non authentifié), utiliser uniquement le message actuel
+                $messages = [
+                    [
+                        'role' => 'user',
+                        'content' => $userMessage
+                    ]
+                ];
+            }
+
+            // Configuration de l'API Ollama
             $ollamaHost = config('services.ollama.host', 'host.docker.internal');
             $ollamaPort = config('services.ollama.port', '11434');
-            $ollamaUrl = 'http://'.$ollamaHost.':'.$ollamaPort.'/api/generate';
+            $ollamaUrl = 'http://'.$ollamaHost.':'.$ollamaPort.'/api/chat'; // Endpoint pour lister les modèles
 
-            Log::info('Envoi d\'une requête à Ollama: '.$ollamaUrl);
-            Log::info('Modèle: '.$request->input('model').', Température: '.$temperature.', Max tokens: '.$maxTokens);
+            Log::info('Envoi du message à Ollama: '.$ollamaUrl);
 
-            // Requête POST vers l'API Ollama
+            // Préparation du prompt avec le contexte
             $response = Http::timeout(60)->post($ollamaUrl, [
-                'model' => $request->input('model'),
-                'prompt' => $request->input('message'),
-                'temperature' => (float) $temperature,
-                'max_tokens' => (int) $maxTokens,
+                'model' => $modelName,
+                'messages' => $messages, // Utilisation de la fenêtre locale comme contexte
+                'options' => [
+                    'temperature' => (float) $temperature,
+                    'max_tokens' => (int) $maxTokens,
+                ],
                 'stream' => false,
             ]);
 
             if ($response->successful()) {
                 Log::info('Réponse reçue d\'Ollama avec succès');
 
-                $aiResponse = $response->json('response');
+                // Récupérer la réponse depuis le format de l'API /api/chat
+                $aiResponse = $response->json('message.content');
 
                 // Sauvegarder la réponse de l'assistant
                 if (Auth::check() && $conversation) {
