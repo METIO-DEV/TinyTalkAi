@@ -3,7 +3,7 @@
         <div id="history-container" class="space-y-2 overflow-y-auto max-h-60 bg-custom-white dark:bg-custom-light-dark-mode rounded-lg p-2">
             @if(count($conversations) > 0)
                 @foreach($conversations as $conversation)
-                    <div class="conversation-item px-3 py-2 rounded-md hover:bg-custom-light dark:hover:bg-custom-mid-dark-mode cursor-pointer transition-colors duration-200 flex justify-between items-center {{ $selectedConversationId === $conversation->id ? 'bg-custom-light dark:bg-custom-mid-dark-mode' : '' }}" 
+                    <div class="conversation-item px-3 py-2 rounded-md hover:bg-custom-light dark:hover:bg-custom-mid-dark-mode cursor-pointer transition-colors duration-200 flex justify-between items-center {{ $selectedConversationId == $conversation->id ? 'bg-custom-light dark:bg-custom-mid-dark-mode' : '' }}" 
                          wire:click="selectConversation('{{ $conversation->id }}')">
                         <div class="flex-1 min-w-0">
                             <div class="flex flex-col">

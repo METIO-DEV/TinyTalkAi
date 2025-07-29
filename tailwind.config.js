@@ -31,6 +31,9 @@ export default {
                 'dark-text': '#FFFFFF',      // Texte en mode sombre
                 'dark-border': '#333333',    // Bordures en mode sombre
                 'dark-hover': '#333333',     // Couleur de survol en mode sombre
+                'custom-green': '#22C55E',
+                'custom-yellow': '#D97706',
+                'custom-red': '#EF4444',
             },
             padding: {
                 '7': '1.75rem',

@@ -5,7 +5,7 @@
             @foreach($availableModels as $model)
                 <button
                     wire:click="selectModel('{{ $model['name'] }}')"
-                    class="model-button w-full text-left px-3 py-2 rounded-md transition-colors duration-200 {{ $selectedModel === $model['name'] ? 'bg-custom-white dark:bg-custom-light-dark-mode border-custom-black dark:border-custom-white' : 'bg-custom-mid hover:bg-custom-white dark:bg-custom-dark-dark-mode dark:hover:bg-custom-light-dark-mode' }} border"
+                    class="model-button w-full text-left px-3 py-2 rounded-md transition-colors duration-200 {{ $selectedModel === $model['name'] ? 'bg-custom-white dark:bg-custom-mid-dark-mode border-none' : 'bg-custom-mid dark:bg-custom-light-dark-mode hover:bg-custom-white hover:dark:bg-custom-mid-dark-mode dark:hover:border-custom-black border-none' }}"
                 >
                     <div class="text-sm font-medium text-custom-black dark:text-custom-white">
                         {{ explode(':', $model['name'])[0] }}

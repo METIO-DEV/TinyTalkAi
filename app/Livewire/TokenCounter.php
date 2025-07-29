@@ -3,6 +3,8 @@
 namespace App\Livewire;
 
 use App\Models\Conversation;
+use App\Models\Message;
+use App\Services\ConversationMemoryService;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Log;
 use Livewire\Component;
@@ -30,6 +32,16 @@ class TokenCounter extends Component
     public int $tokensUsed = 0;
 
     /**
+     * Service de gestion de la mémoire des conversations
+     */
+    protected $memoryService;
+
+    /**
+     * Indique si un résumé est en cours de génération
+     */
+    public bool $isSummarizing = false;
+
+    /**
      * Écoute les événements de mise à jour du modèle et des tokens
      */
     protected $listeners = [
@@ -39,6 +51,14 @@ class TokenCounter extends Component
         'conversationCleared' => 'clearConversation',
         'loadingComplete' => '$refresh',
     ];
+
+    /**
+     * Initialisation du composant
+     */
+    public function boot(ConversationMemoryService $memoryService)
+    {
+        $this->memoryService = $memoryService;
+    }
 
     /**
      * Initialisation du composant
@@ -224,6 +244,104 @@ class TokenCounter extends Component
 
         // Mettre à jour depuis la base de données plutôt que d'utiliser la valeur passée
         $this->updateTokensFromDatabase();
+
+        // Vérifier si nous devons générer un résumé automatiquement (seuil de 90%)
+        if ($this->tokenLimit && $this->tokensUsed > 0) {
+            if ($this->memoryService->shouldSummarize($this->conversationId, $this->tokensUsed, $this->tokenLimit)) {
+                $this->summarizeConversation();
+            }
+        }
+    }
+
+    /**
+     * Génère un résumé de la conversation actuelle
+     */
+    public function summarizeConversation()
+    {
+        if (! $this->conversationId) {
+            $this->dispatch('notify', [
+                'type' => 'error',
+                'message' => 'Aucune conversation active à résumer',
+            ]);
+
+            return;
+        }
+
+        // Vérifier si un résumé vient d'être fait récemment
+        $conversation = Conversation::find($this->conversationId);
+        if ($conversation && $conversation->summary_flag) {
+            Log::info('Tentative de résumé sur une conversation déjà résumée', [
+                'conversation_id' => $this->conversationId,
+                'summary_flag' => $conversation->summary_flag,
+                'tokens' => $conversation->tokens,
+            ]);
+
+            // Vérifier s'il y a eu de nouveaux messages depuis le dernier résumé
+            $hasNewMessages = Message::where('conversation_id', $this->conversationId)
+                ->where('id', '>', $conversation->summary_message_id)
+                ->exists();
+
+            if (! $hasNewMessages) {
+                $this->dispatch('notify', [
+                    'type' => 'info',
+                    'message' => 'La conversation a déjà été résumée et aucun nouveau message n\'a été ajouté depuis.',
+                ]);
+
+                return;
+            }
+        }
+
+        // Activer l'indicateur de chargement
+        $this->isSummarizing = true;
+        Log::info('Début de la génération du résumé', [
+            'conversation_id' => $this->conversationId,
+            'isSummarizing' => $this->isSummarizing,
+        ]);
+
+        try {
+            $success = $this->memoryService->updateSummary($this->conversationId);
+
+            if ($success) {
+                // Rafraîchir le compteur de tokens après la génération du résumé
+                $this->updateTokensFromDatabase();
+
+                $this->dispatch('notify', [
+                    'type' => 'success',
+                    'message' => 'Résumé de la conversation généré avec succès',
+                ]);
+
+                Log::info('Résumé généré avec succès', [
+                    'conversation_id' => $this->conversationId,
+                    'tokens_after_summary' => $this->tokensUsed,
+                ]);
+            } else {
+                $this->dispatch('notify', [
+                    'type' => 'error',
+                    'message' => 'Erreur lors de la génération du résumé',
+                ]);
+
+                Log::error('Échec de la génération du résumé', [
+                    'conversation_id' => $this->conversationId,
+                ]);
+            }
+        } catch (\Exception $e) {
+            Log::error('Erreur lors de la génération du résumé: '.$e->getMessage(), [
+                'conversation_id' => $this->conversationId,
+                'exception' => get_class($e),
+            ]);
+
+            $this->dispatch('notify', [
+                'type' => 'error',
+                'message' => 'Erreur lors de la génération du résumé: '.$e->getMessage(),
+            ]);
+        } finally {
+            // Désactiver l'indicateur de chargement, peu importe le résultat
+            $this->isSummarizing = false;
+            Log::info('Fin de la génération du résumé', [
+                'conversation_id' => $this->conversationId,
+                'isSummarizing' => $this->isSummarizing,
+            ]);
+        }
     }
 
     /**
@@ -246,11 +364,11 @@ class TokenCounter extends Component
         $percentage = $this->token_percentage;
 
         if ($percentage < 50) {
-            return 'bg-custom-black'; // Noir pour moins de 50%
+            return '#138f40'; // Vert pour moins de 50%
         } elseif ($percentage < 80) {
-            return 'bg-gray-500'; // Gris pour entre 50% et 80%
+            return '#ab6413'; // Jaune pour entre 50% et 80%
         } else {
-            return 'bg-red-500'; // Rouge pour plus de 80%
+            return '#b01313'; // Rouge pour plus de 80%
         }
     }
 

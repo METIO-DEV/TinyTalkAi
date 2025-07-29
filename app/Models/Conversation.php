@@ -14,6 +14,9 @@ class Conversation extends Model
         'title',
         'model_name',
         'tokens',
+        'summary',
+        'summary_flag',
+        'summary_message_id',
     ];
 
     /**
@@ -23,6 +26,8 @@ class Conversation extends Model
      */
     protected $casts = [
         'tokens' => 'integer',
+        'summary_flag' => 'boolean',
+        'summary_message_id' => 'integer',
     ];
 
     public function user()

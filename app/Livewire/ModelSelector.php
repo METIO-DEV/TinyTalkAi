@@ -19,6 +19,13 @@ class ModelSelector extends Component
     public array $availableModels = [];
 
     /**
+     * Écoute les événements
+     */
+    protected $listeners = [
+        'modelSelected' => 'updateSelectedModel',
+    ];
+
+    /**
      * Initialisation du composant
      */
     public function mount()
@@ -136,6 +143,12 @@ class ModelSelector extends Component
 
         // Émettre un événement pour informer les autres composants
         $this->dispatch('modelSelected', $modelName);
+    }
+
+    public function updateSelectedModel($modelName)
+    {
+        // Mettre à jour le modèle sélectionné
+        $this->selectedModel = $modelName;
     }
 
     public function render()

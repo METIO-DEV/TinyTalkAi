@@ -205,7 +205,29 @@ class ChatForm extends Component
             // Récupérer la fenêtre locale (contexte des messages précédents)
             $messages = [];
             if ($conversation) {
-                $messages = $this->memoryService->getLocalWindow($conversation->id);
+                // Vérifier s'il existe un résumé pour cette conversation
+                if ($conversation->summary_flag && $conversation->summary) {
+                    // Ajouter le résumé comme message système en premier
+                    $messages[] = [
+                        'role' => 'system',
+                        'content' => "Résumé de la conversation précédente: {$conversation->summary}",
+                    ];
+
+                    Log::info('Résumé ajouté au contexte', [
+                        'conversation_id' => $conversation->id,
+                        'summary_length' => strlen($conversation->summary),
+                        'summary_message_id' => $conversation->summary_message_id,
+                    ]);
+                }
+
+                // Récupérer les messages de la fenêtre locale (déjà filtrés par summary_message_id)
+                $localWindow = $this->memoryService->getLocalWindow($conversation->id);
+                $messages = array_merge($messages, $localWindow);
+
+                Log::info('Fenêtre locale récupérée', [
+                    'conversation_id' => $conversation->id,
+                    'message_count' => count($localWindow),
+                ]);
             } else {
                 // Si pas de conversation (utilisateur non authentifié), utiliser uniquement le message actuel
                 $messages = [
@@ -224,7 +246,7 @@ class ChatForm extends Component
             Log::info('Envoi du message à Ollama: '.$ollamaUrl);
 
             // Préparation du prompt avec le contexte
-            $response = Http::timeout(120)->post($ollamaUrl, [
+            $response = Http::timeout(600)->post($ollamaUrl, [
                 'model' => $this->selectedModel,
                 'messages' => $messages,
                 'options' => [

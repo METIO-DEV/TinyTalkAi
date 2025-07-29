@@ -31,7 +31,7 @@
         ></textarea>
         <button 
             type="submit" 
-            class="bg-custom-black border border-custom-black text-white dark:text-custom-white dark:border-custom-white dark:bg-custom-light-dark-mode px-6 items-center rounded-r-lg transition-all duration-200 flex justify-center"
+            class="bg-custom-black border border-custom-black text-white dark:text-custom-white dark:border-custom-white dark:bg-custom-light-dark-mode hover:dark:bg-custom-mid hover:dark:text-custom-black hover:bg-custom-mid px-6 items-center rounded-r-lg transition-all duration-200 flex justify-center"
             {{ $selectedModel ? '' : 'disabled' }}
             wire:loading.attr="disabled"
         >
