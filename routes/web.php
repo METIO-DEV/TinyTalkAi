@@ -15,6 +15,11 @@ Route::post('api/chat', [ChatController::class, 'sendMessage'])
     ->middleware(['auth', 'verified'])
     ->name('api.chat');
 
+// Route pour récupérer les détails d'un modèle (limite de tokens, etc.)
+Route::post('api/model-details', [ChatController::class, 'apiGetModelDetails'])
+    ->middleware(['auth', 'verified'])
+    ->name('api.model.details');
+
 // Route pour récupérer l'historique des conversations
 Route::get('api/conversation/{conversationId}', [ChatController::class, 'getConversationHistory'])
     ->middleware(['auth', 'verified'])

@@ -13,6 +13,16 @@ class Conversation extends Model
         'user_id',
         'title',
         'model_name',
+        'tokens',
+    ];
+
+    /**
+     * Les attributs qui doivent être castés.
+     *
+     * @var array
+     */
+    protected $casts = [
+        'tokens' => 'integer',
     ];
 
     public function user()

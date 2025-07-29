@@ -24,11 +24,11 @@ class ChatController extends Controller
      * Service de gestion de la mémoire conversationnelle
      */
     protected ConversationMemoryService $memoryService;
-    
+
     /**
      * Constructeur du contrôleur
-     * 
-     * @param ConversationMemoryService $memoryService Service de mémoire conversationnelle
+     *
+     * @param  ConversationMemoryService  $memoryService  Service de mémoire conversationnelle
      */
     public function __construct(ConversationMemoryService $memoryService)
     {
@@ -75,6 +75,7 @@ class ChatController extends Controller
      * - Le timeout est limité à 5 secondes pour éviter de bloquer l'interface
      * - Gestion complète des erreurs avec journalisation pour faciliter le débogage
      * - Retourne un tableau vide en cas d'échec pour éviter les erreurs dans la vue
+     * - Récupère les informations de limites de tokens pour chaque modèle
      *
      * @return array Liste des modèles disponibles ou tableau vide si erreur
      */
@@ -87,6 +88,7 @@ class ChatController extends Controller
             $ollamaHost = config('services.ollama.host', 'host.docker.internal');
             $ollamaPort = config('services.ollama.port', '11434'); // Port par défaut d'Ollama
             $ollamaUrl = 'http://'.$ollamaHost.':'.$ollamaPort.'/api/tags'; // Endpoint pour lister les modèles
+            $ollamaBaseUrl = 'http://'.$ollamaHost.':'.$ollamaPort; // URL de base pour les autres endpoints
 
             // Journalisation pour faciliter le débogage et le monitoring
             Log::info('Tentative de connexion à Ollama: '.$ollamaUrl);
@@ -99,8 +101,45 @@ class ChatController extends Controller
                 Log::info('Connexion à Ollama réussie');
 
                 // Extraction des modèles depuis la réponse JSON
-                // L'API Ollama renvoie les modèles sous la clé 'models'
-                return $response->json('models');
+                $models = $response->json('models');
+
+                // Pour chaque modèle, récupérer les informations détaillées incluant les limites de tokens
+                foreach ($models as $key => $model) {
+                    try {
+                        // Requête à l'API /api/show pour obtenir les détails du modèle
+                        $modelResponse = Http::timeout(3)->post($ollamaBaseUrl.'/api/show', [
+                            'name' => $model['name'],
+                        ]);
+
+                        if ($modelResponse->successful()) {
+                            $modelDetails = $modelResponse->json();
+
+                            // Ajouter les informations de limites de tokens si disponibles
+                            if (isset($modelDetails['parameters'])) {
+                                $models[$key]['parameters'] = $modelDetails['parameters'];
+
+                                // Extraire spécifiquement les limites de tokens pour un accès plus facile
+                                if (isset($modelDetails['parameters']['num_ctx'])) {
+                                    $models[$key]['token_limit'] = $modelDetails['parameters']['num_ctx'];
+                                }
+                            }
+
+                            // Ajouter d'autres informations utiles si disponibles
+                            if (isset($modelDetails['template'])) {
+                                $models[$key]['template'] = $modelDetails['template'];
+                            }
+
+                            if (isset($modelDetails['license'])) {
+                                $models[$key]['license'] = $modelDetails['license'];
+                            }
+                        }
+                    } catch (\Exception $e) {
+                        Log::warning('Impossible de récupérer les détails du modèle '.$model['name'].': '.$e->getMessage());
+                        // Continuer avec le modèle suivant même si celui-ci échoue
+                    }
+                }
+
+                return $models;
             }
 
             // Journalisation en cas d'échec avec le code d'état HTTP
@@ -177,20 +216,20 @@ class ChatController extends Controller
     public function sendMessage(Request $request)
     {
         try {
-            // Validation des données d'entrée
+            // Validation des données d'entrée avec valeurs par défaut pour temperature et max_tokens
             $request->validate([
                 'message' => 'required|string',
                 'model' => 'required|string',
-                'temperature' => 'required|numeric|min:0|max:2',
-                'max_tokens' => 'required|integer|min:10|max:4096',
-                'conversation_id' => 'nullable|integer|exists:conversations,id',
+                'temperature' => 'nullable|numeric|min:0|max:2',
+                'max_tokens' => 'nullable|integer|min:10|max:4096',
+                'conversation_id' => 'nullable|string|exists:conversations,id',
             ]);
 
-            // Récupération des paramètres
+            // Récupération des paramètres avec valeurs par défaut
             $userMessage = $request->input('message');
             $modelName = $request->input('model');
-            $temperature = $request->input('temperature');
-            $maxTokens = $request->input('max_tokens');
+            $temperature = $request->input('temperature', 0.7);
+            $maxTokens = $request->input('max_tokens', 2048);
             $conversationId = $request->input('conversation_id');
 
             // Paramètres pour l'API Ollama
@@ -240,8 +279,8 @@ class ChatController extends Controller
                 $messages = [
                     [
                         'role' => 'user',
-                        'content' => $userMessage
-                    ]
+                        'content' => $userMessage,
+                    ],
                 ];
             }
 
@@ -380,5 +419,87 @@ class ChatController extends Controller
             'success' => true,
             'message' => 'Conversation supprimée avec succès',
         ]);
+    }
+
+    /**
+     * Récupère les détails d'un modèle spécifique via l'API Ollama
+     *
+     * Cette méthode interroge l'endpoint '/api/show' d'Ollama pour obtenir
+     * les détails d'un modèle spécifique, notamment sa limite de tokens.
+     *
+     * @param  string  $modelName  Nom du modèle à interroger
+     * @return array Détails du modèle ou tableau vide si erreur
+     */
+    public function getModelDetails($modelName)
+    {
+        try {
+            // Récupération des paramètres de configuration avec valeurs par défaut
+            $ollamaHost = config('services.ollama.host', 'host.docker.internal');
+            $ollamaPort = config('services.ollama.port', '11434');
+            $ollamaUrl = 'http://'.$ollamaHost.':'.$ollamaPort.'/api/show';
+
+            // Requête HTTP avec timeout court pour éviter de bloquer l'interface utilisateur
+            $response = Http::timeout(3)->post($ollamaUrl, [
+                'name' => $modelName,
+            ]);
+
+            // Vérification du succès de la requête (code 2xx)
+            if ($response->successful()) {
+                $modelDetails = $response->json();
+
+                // Extraire la limite de tokens si disponible
+                $tokenLimit = null;
+
+                // Vérifier dans parameters.num_ctx
+                if (isset($modelDetails['parameters']) && isset($modelDetails['parameters']['num_ctx'])) {
+                    $tokenLimit = (int) $modelDetails['parameters']['num_ctx'];
+                }
+                // Vérifier aussi dans model_info.llama.context_length si disponible
+                elseif (isset($modelDetails['model_info']) && isset($modelDetails['model_info']['llama.context_length'])) {
+                    $tokenLimit = (int) $modelDetails['model_info']['llama.context_length'];
+                }
+
+                return [
+                    'success' => true,
+                    'details' => $modelDetails,
+                    'token_limit' => $tokenLimit,
+                ];
+            }
+
+            return ['success' => false, 'error' => 'Échec de la requête: '.$response->status()];
+        } catch (\Exception $e) {
+            Log::error('Erreur lors de la récupération des détails du modèle: '.$e->getMessage());
+
+            return ['success' => false, 'error' => $e->getMessage()];
+        }
+    }
+
+    /**
+     * Endpoint API pour récupérer les détails d'un modèle
+     *
+     * @param  Request  $request  Requête HTTP contenant le nom du modèle
+     * @return \Illuminate\Http\JsonResponse Réponse JSON avec les détails du modèle
+     */
+    public function apiGetModelDetails(Request $request)
+    {
+        $request->validate([
+            'model' => 'required|string',
+        ]);
+
+        $modelName = $request->input('model');
+        $result = $this->getModelDetails($modelName);
+
+        if ($result['success']) {
+            return response()->json([
+                'success' => true,
+                'token_limit' => $result['token_limit'],
+                'details' => $result['details'],
+            ]);
+        }
+
+        return response()->json([
+            'success' => false,
+            'error' => $result['error'],
+        ], 500);
     }
 }
