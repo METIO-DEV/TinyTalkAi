@@ -1,29 +1,16 @@
 <!-- Composant pour l'interface de chat -->
 <div class="flex flex-col h-full bg-custom-white dark:bg-custom-light-dark-mode dark:text-custom-white rounded-lg shadow-xl">
     <!-- Zone des messages -->
-    <div id="chat-messages" class="flex-1 overflow-y-auto space-y-4 p-6 dark:text-custom-white">
-        <!-- Le message initial sera géré par JavaScript en fonction du modèle sélectionné -->
-    </div>
+    @livewire('chat-messages')
     
     <!-- Zone de saisie du message -->
     <div class="p-4 bg-transparent">
-        <form id="chat-form" class="flex gap-4 w-full justify-between items-stretch">
-            <textarea 
-                id="chat-input" 
-                class="flex-1 border border-custom-mid rounded-l-lg px-4 py-2 focus:outline-none focus:ring-2 focus:ring-custom-mid bg-custom-white text-custom-black dark:text-custom-white dark:border-custom-white dark:bg-custom-light-dark-mode resize-none overflow-y-auto [&::-webkit-scrollbar]:w-0" 
-                placeholder="Écrivez à "
-                rows="1"
-                disabled
-            ></textarea>
-            <button 
-                type="submit" 
-                id="send-button" 
-                class="bg-custom-black border border-custom-black text-white dark:text-custom-white dark:border-custom-white dark:bg-custom-light-dark-mode px-6 items-center rounded-r-lg transition-all duration-200"
-                disabled
-            >
-                Envoyer
-            </button>
-        </form>
+        @livewire('chat-form')
+        
+        <!-- Compteur de tokens -->
+        <div class="mt-2">
+            <livewire:token-counter />
+        </div>
     </div>
 </div>
 
@@ -100,3 +87,36 @@
         50% { border-color: #000; }
     }
 </style>
+
+<script>
+
+// Auto‑scroll « toujours en bas » même après changement de conversation
+// --------------------------------------------------------------------
+
+(() => {
+    let observer;
+
+    const scrollToBottom = (container) => {
+        if (container) container.scrollTop = container.scrollHeight;
+    };
+
+    const initScroll = () => {
+        const container = document.getElementById('chat-messages');
+        if (!container) return;
+
+        // 1️⃣  Systématiquement en bas
+        scrollToBottom(container);
+
+        // 2️⃣  (Re)‑observe les ajouts
+        observer?.disconnect();
+        observer = new MutationObserver(() => scrollToBottom(container));
+        observer.observe(container, { childList: true });
+    };
+
+    // Au chargement
+    document.addEventListener('DOMContentLoaded', initScroll);
+
+    // Après chaque diff Livewire
+    document.addEventListener('livewire:update', initScroll);
+})();
+</script>

@@ -19,12 +19,15 @@
                             <a href="{{ route('profile') }}" class="flex justify-center items-center px-4 py-2 text-sm text-custom-black dark:text-custom-white rounded-md hover:bg-custom-mid-dark-mode dark:hover:bg-custom-mid-dark-mode">
                                 {{ __('Profile') }}
                             </a>
-                            <form method="POST" action="{{ route('logout') }}" id="logout-form">
+                            <livewire:logout /> <!-- Utilisation du composant "logout" Livewire -->
+
+                            <!-- Utilisation de la méthode classique, avec un formulaire et une route qui effectue la déconnexion -->
+                            <!-- <form method="POST" action="{{ route('logout') }}" id="logout-form">
                                 @csrf
                                 <x-danger-button type="button" id="logout-button" class="w-full flex justify-center items-center px-4 py-2 text-sm text-custom-black dark:text-custom-white rounded-md">
                                     {{ __('Log Out') }}
                                 </x-danger-button>  
-                            </form>
+                            </form> -->
                         </div>
                     </div>
                 </div>
@@ -45,69 +48,74 @@
             </h3>
         </div>
         <div id="models-section" class="space-y-2">
-            <x-model-list :models="$models" :selectedModel="$selectedModel ?? null" /> <!-- Composant pour la liste des modèles -->
+            @livewire('model-selector')
         </div>
     </div>
-    
-    <!-- Section Réglages -->
-    <div class="mb-6">
-        <div class="flex items-center justify-between mb-4">
-            <h3 class="text-sm font-semibold text-custom-black dark:text-custom-white uppercase tracking-wider">
-                <button class="flex items-center w-full text-left focus:outline-none" data-collapse-toggle="settings-section">
-                    <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 mr-1 transform transition-transform" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7" />
-                    </svg>
-                    Réglages
-                </button>
-            </h3>
-        </div>
-        <div id="settings-section" class="space-y-2 overflow-y-auto max-h-48">
-            <x-settings-panel :temperature="$temperature ?? 0.7" :maxTokens="$maxTokens ?? 1024" />
-        </div>
-    </div>
-
-    
     
     <!-- Section Historique -->
     <div class="mb-6">
         <div class="flex items-center justify-between mb-4">
             <h3 class="text-sm font-semibold text-custom-black dark:text-custom-white uppercase tracking-wider">
-                <button class="flex items-center w-full text-left focus:outline-none" data-collapse-toggle="history-section">
+                <button class="flex items-center text-left focus:outline-none" data-collapse-toggle="history-section">
                     <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 mr-1 transform transition-transform" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7" />
                     </svg>
                     Historique
                 </button>
             </h3>
+            <button 
+                class="flex items-center rounded-md hover:bg-custom-mid cursor-pointer transition-colors duration-200 text-gray-500 hover:text-custom-black dark:text-white dark:hover:text-custom-white dark:hover:bg-custom-mid-dark-mode dark:hover:border-custom-black border-none" 
+                title="Nouvelle conversation"
+                onclick="Livewire.dispatch('newConversation')">
+                <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6v12m6-6H6" />
+                </svg>
+            </button>
         </div>
-        <div id="history-section" class="space-y-2 overflow-y-auto max-h-48">
-            <!-- Cette section sera remplie dynamiquement avec l'historique des conversations -->
-            <div class="text-sm text-gray-500 dark:text-gray-300 px-3 py-2">
-                Aucune conversation enregistrée
-            </div>  
+        <div id="history-section">
+            @livewire('conversation-history')
         </div>
     </div>
 </div>
 
 <script>
-    const profileDropdownButton = document.getElementById('profile-dropdown-button');
-    const profileDropdownMenu = document.getElementById('profile-dropdown-menu');
-    const logoutButton = document.getElementById('logout-button');
-    const logoutForm = document.getElementById('logout-form');
-
-    profileDropdownButton.addEventListener('click', () => {
-        profileDropdownMenu.classList.toggle('hidden');
-    });
-
-    document.addEventListener('click', (e) => {
-        if (!profileDropdownButton.contains(e.target) && !profileDropdownMenu.contains(e.target)) {
-            profileDropdownMenu.classList.add('hidden');
+    document.addEventListener('DOMContentLoaded', function() {
+        // Gestion du dropdown du profil
+        const profileDropdownButton = document.getElementById('profile-dropdown-button');
+        const profileDropdownMenu = document.getElementById('profile-dropdown-menu');
+        
+        if (profileDropdownButton && profileDropdownMenu) {
+            profileDropdownButton.addEventListener('click', function() {
+                profileDropdownMenu.classList.toggle('hidden');
+            });
+            
+            // Fermer le dropdown quand on clique ailleurs
+            document.addEventListener('click', function(event) {
+                if (!profileDropdownButton.contains(event.target) && !profileDropdownMenu.contains(event.target)) {
+                    profileDropdownMenu.classList.add('hidden');
+                }
+            });
         }
-    });
-
-    logoutButton.addEventListener('click', () => {
-        if (confirm('Êtes-vous sûr de vouloir vous déconnecter ?')) {
-            logoutForm.submit();
-        }
+        
+        // Gestion des sections pliables
+        const collapsibleButtons = document.querySelectorAll('[data-collapse-toggle]');
+        
+        collapsibleButtons.forEach(button => {
+            const targetId = button.getAttribute('data-collapse-toggle');
+            const targetElement = document.getElementById(targetId);
+            const chevron = button.querySelector('svg');
+            
+            if (targetElement && chevron) {
+                button.addEventListener('click', () => {
+                    if (targetElement.classList.contains('hidden')) {
+                        targetElement.classList.remove('hidden');
+                        chevron.style.transform = 'rotate(0deg)';
+                    } else {
+                        targetElement.classList.add('hidden');
+                        chevron.style.transform = 'rotate(-90deg)';
+                    }
+                });
+            }
+        });
     });
 </script>
