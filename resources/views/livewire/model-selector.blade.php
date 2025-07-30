@@ -1,6 +1,5 @@
 <div class="model-selector">
     <div class="mb-4">
-        <h2 class="text-lg font-semibold text-custom-black dark:text-custom-white mb-2">Modèles</h2>
         <div class="space-y-2">
             @foreach($availableModels as $model)
                 <button

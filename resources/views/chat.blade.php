@@ -20,13 +20,12 @@
     <div class="min-h-screen flex">
         <!-- Sidebar -->
         <div class="w-1/5 shrink-0 h-screen overflow-hidden ">
-            <x-sidebar :models="$models" :conversations="$conversations" />
+            <x-sidebar />
         </div>
         
         <!-- Chat main area -->
         <div class="w-4/5 flex-1 flex flex-col h-screen overflow-hidden p-6">
             <x-chat-interface />
-            
         </div>
     </div>
     

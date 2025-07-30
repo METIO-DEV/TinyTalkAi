@@ -64,11 +64,11 @@
                 </button>
             </h3>
             <button 
-                class="text-gray-500 hover:text-custom-black dark:text-gray-400 dark:hover:text-custom-white" 
+                class="flex items-center rounded-md hover:bg-custom-mid cursor-pointer transition-colors duration-200 text-gray-500 hover:text-custom-black dark:text-white dark:hover:text-custom-white dark:hover:bg-custom-mid-dark-mode dark:hover:border-custom-black border-none" 
                 title="Nouvelle conversation"
                 onclick="Livewire.dispatch('newConversation')">
                 <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                    <path stroke-linecap="round" stroke-linejoin="round" d="M12 6v12m6-6H6" />
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6v12m6-6H6" />
                 </svg>
             </button>
         </div>

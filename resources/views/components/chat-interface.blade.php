@@ -87,3 +87,36 @@
         50% { border-color: #000; }
     }
 </style>
+
+<script>
+
+// Auto‑scroll « toujours en bas » même après changement de conversation
+// --------------------------------------------------------------------
+
+(() => {
+    let observer;
+
+    const scrollToBottom = (container) => {
+        if (container) container.scrollTop = container.scrollHeight;
+    };
+
+    const initScroll = () => {
+        const container = document.getElementById('chat-messages');
+        if (!container) return;
+
+        // 1️⃣  Systématiquement en bas
+        scrollToBottom(container);
+
+        // 2️⃣  (Re)‑observe les ajouts
+        observer?.disconnect();
+        observer = new MutationObserver(() => scrollToBottom(container));
+        observer.observe(container, { childList: true });
+    };
+
+    // Au chargement
+    document.addEventListener('DOMContentLoaded', initScroll);
+
+    // Après chaque diff Livewire
+    document.addEventListener('livewire:update', initScroll);
+})();
+</script>

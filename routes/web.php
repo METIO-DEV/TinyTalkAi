@@ -1,39 +1,13 @@
 <?php
 
-use App\Http\Controllers\ChatController;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Route;
 
-// Route pour la page d'accueil (chat)
-Route::get('/', [ChatController::class, 'index'])
+// Route pour la page d'accueil (chat) - directement vers la vue sans contrôleur
+Route::view('/', 'chat')
     ->middleware(['auth', 'verified'])
     ->name('home');
-
-// Route pour envoyer un message au chat
-Route::post('api/chat', [ChatController::class, 'sendMessage'])
-    ->middleware(['auth', 'verified'])
-    ->name('api.chat');
-
-// Route pour récupérer les détails d'un modèle (limite de tokens, etc.)
-Route::post('api/model-details', [ChatController::class, 'apiGetModelDetails'])
-    ->middleware(['auth', 'verified'])
-    ->name('api.model.details');
-
-// Route pour récupérer l'historique des conversations
-Route::get('api/conversation/{conversationId}', [ChatController::class, 'getConversationHistory'])
-    ->middleware(['auth', 'verified'])
-    ->name('api.conversation.history');
-
-// Route pour récupérer la liste des conversations
-Route::get('api/conversations', [ChatController::class, 'getConversations'])
-    ->middleware(['auth', 'verified'])
-    ->name('api.conversations');
-
-// Route pour supprimer une conversation
-Route::delete('api/conversation/{conversationId}', [ChatController::class, 'deleteConversation'])
-    ->middleware(['auth', 'verified'])
-    ->name('api.conversation.delete');
 
 // Route pour la page profile
 Route::view('profile', 'profile')
@@ -69,5 +43,8 @@ Route::post('/logout', function () {
 // Redirection des anciennes routes vers la page d'accueil
 Route::redirect('dashboard', '/')->name('dashboard');
 Route::redirect('chat', '/');
+
+// Redirection vers la page de login pour éviter l'erreur 404 après expiration de session
+Route::redirect('login', '/login')->name('login');
 
 require __DIR__.'/auth.php';

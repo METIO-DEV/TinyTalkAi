@@ -28,12 +28,15 @@
             placeholder="{{ $selectedModel ? 'Écrivez à '.$selectedModel.'...' : 'Sélectionnez un modèle...' }}"
             rows="1"
             {{ $selectedModel ? '' : 'disabled' }}
-        ></textarea>
+        ></textarea>    
         <button 
             type="submit" 
             class="bg-custom-black border border-custom-black text-white dark:text-custom-white dark:border-custom-white dark:bg-custom-light-dark-mode hover:dark:bg-custom-mid hover:dark:text-custom-black hover:bg-custom-mid px-6 items-center rounded-r-lg transition-all duration-200 flex justify-center"
             {{ $selectedModel ? '' : 'disabled' }}
+            {{ $isSummarizing ? 'disabled' : '' }}
             wire:loading.attr="disabled"
+            wire:loading.class="opacity-50 cursor-not-allowed"
+            wire:target="sendMessage, $parent"
         >
             <span wire:loading.remove>Envoyer</span>
             <svg wire:loading class="animate-spin h-5 w-5 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">

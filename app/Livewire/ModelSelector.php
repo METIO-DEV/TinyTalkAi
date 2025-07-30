@@ -59,66 +59,15 @@ class ModelSelector extends Component
                 // Traitement des modèles pour ajouter les informations nécessaires
                 $this->availableModels = [];
                 foreach ($models as $model) {
-                    // Récupérer les détails du modèle pour obtenir la limite de tokens
-                    $modelDetails = $this->getModelDetails($model['name']);
-
-                    // Ajouter le modèle à la liste avec toutes les informations nécessaires
+                    // Ajouter le modèle à la liste avec les informations de base
                     $this->availableModels[] = [
                         'name' => $model['name'],
                         'size' => $model['size'] ?? 0,
-                        'token_limit' => $modelDetails['token_limit'] ?? null,
                     ];
                 }
             }
         } catch (\Exception $e) {
             Log::error('Erreur lors de la récupération des modèles: '.$e->getMessage());
-        }
-    }
-
-    /**
-     * Récupère les détails d'un modèle spécifique via l'API Ollama
-     */
-    private function getModelDetails($modelName)
-    {
-        try {
-            // Récupération des paramètres de configuration avec valeurs par défaut
-            $ollamaHost = config('services.ollama.host', 'host.docker.internal');
-            $ollamaPort = config('services.ollama.port', '11434');
-            $ollamaUrl = 'http://'.$ollamaHost.':'.$ollamaPort.'/api/show';
-
-            // Requête HTTP avec timeout court pour éviter de bloquer l'interface utilisateur
-            $response = Http::timeout(3)->post($ollamaUrl, [
-                'name' => $modelName,
-            ]);
-
-            // Vérification du succès de la requête (code 2xx)
-            if ($response->successful()) {
-                $modelDetails = $response->json();
-
-                // Extraire la limite de tokens si disponible
-                $tokenLimit = null;
-
-                // Vérifier dans parameters.num_ctx
-                if (isset($modelDetails['parameters']) && isset($modelDetails['parameters']['num_ctx'])) {
-                    $tokenLimit = (int) $modelDetails['parameters']['num_ctx'];
-                }
-                // Vérifier aussi dans model_info.llama.context_length si disponible
-                elseif (isset($modelDetails['model_info']) && isset($modelDetails['model_info']['llama.context_length'])) {
-                    $tokenLimit = (int) $modelDetails['model_info']['llama.context_length'];
-                }
-
-                return [
-                    'success' => true,
-                    'details' => $modelDetails,
-                    'token_limit' => $tokenLimit,
-                ];
-            }
-
-            return ['success' => false, 'error' => 'Échec de la requête'];
-        } catch (\Exception $e) {
-            Log::error('Erreur lors de la récupération des détails du modèle: '.$e->getMessage());
-
-            return ['success' => false, 'error' => $e->getMessage()];
         }
     }
 
@@ -132,19 +81,16 @@ class ModelSelector extends Component
         // Sauvegarder le modèle sélectionné dans la session
         session(['selected_model' => $modelName]);
 
-        // Trouver la limite de tokens pour ce modèle
-        $tokenLimit = null;
-        foreach ($this->availableModels as $model) {
-            if ($model['name'] === $modelName) {
-                $tokenLimit = $model['token_limit'];
-                break;
-            }
-        }
+        // Indiquer que la sélection vient de la sidebar
+        session(['model_selection_source' => 'sidebar']);
 
         // Émettre un événement pour informer les autres composants
         $this->dispatch('modelSelected', $modelName);
     }
 
+    /**
+     * Met à jour le modèle sélectionné
+     */
     public function updateSelectedModel($modelName)
     {
         // Mettre à jour le modèle sélectionné

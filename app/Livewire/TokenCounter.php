@@ -42,6 +42,11 @@ class TokenCounter extends Component
     public bool $isSummarizing = false;
 
     /**
+     * Indique si un envoi de message est en cours dans un autre composant
+     */
+    public bool $isMessageSending = false;
+
+    /**
      * Écoute les événements de mise à jour du modèle et des tokens
      */
     protected $listeners = [
@@ -50,6 +55,8 @@ class TokenCounter extends Component
         'conversationSelected' => 'loadConversation',
         'conversationCleared' => 'clearConversation',
         'loadingComplete' => '$refresh',
+        'messageLoadingStarted' => 'onMessageLoadingStarted',
+        'messageLoadingEnded' => 'onMessageLoadingEnded',
     ];
 
     /**
@@ -118,13 +125,8 @@ class TokenCounter extends Component
                 // Extraire la limite de tokens si disponible
                 $tokenLimit = null;
 
-                // Vérifier dans parameters.num_ctx (priorité 1)
-                if (isset($modelDetails['parameters']) && isset($modelDetails['parameters']['num_ctx'])) {
-                    $this->tokenLimit = (int) $modelDetails['parameters']['num_ctx'];
-                    Log::info("Limite de tokens trouvée dans parameters.num_ctx: {$this->tokenLimit}");
-                }
-                // Recherche récursive de tout champ contenant "context" dans model_info (priorité 2)
-                elseif (isset($modelDetails['model_info'])) {
+                // Recherche récursive de tout champ contenant "context" dans model_info
+                if (isset($modelDetails['model_info'])) {
                     $this->tokenLimit = $this->findContextLength($modelDetails['model_info']);
                     if ($this->tokenLimit) {
                         Log::info("Limite de tokens trouvée dans model_info: {$this->tokenLimit}");
@@ -156,10 +158,7 @@ class TokenCounter extends Component
         foreach ($data as $key => $value) {
             // Vérifier si la clé contient "context" ou "ctx"
             if (is_string($key) &&
-                (stripos($key, 'context_length') !== false ||
-                 stripos($key, 'context') !== false ||
-                 stripos($key, 'ctx') !== false ||
-                 stripos($key, 'length') !== false)) {
+                (stripos($key, 'context_length') !== false)) {
 
                 // Si la valeur est numérique, c'est probablement ce qu'on cherche
                 if (is_numeric($value)) {
@@ -254,14 +253,59 @@ class TokenCounter extends Component
     }
 
     /**
+     * Appelé quand un envoi de message commence
+     */
+    public function onMessageLoadingStarted()
+    {
+        $this->isMessageSending = true;
+    }
+
+    /**
+     * Appelé quand un envoi de message se termine
+     */
+    public function onMessageLoadingEnded()
+    {
+        $this->isMessageSending = false;
+    }
+
+    /**
      * Génère un résumé de la conversation actuelle
      */
     public function summarizeConversation()
     {
+        // Vérifier si une requête est déjà en cours
+        if ($this->isSummarizing) {
+            Log::info('Tentative de résumé ignorée car un résumé est déjà en cours', [
+                'conversation_id' => $this->conversationId,
+            ]);
+
+            $this->dispatch('notify', [
+                'type' => 'info',
+                'message' => 'Un résumé est déjà en cours de génération, veuillez patienter.',
+            ]);
+
+            return;
+        }
+
+        // Vérifier si un envoi de message est en cours
+        if ($this->isMessageSending) {
+            Log::info('Tentative de résumé ignorée car un envoi de message est en cours', [
+                'conversation_id' => $this->conversationId,
+            ]);
+
+            $this->dispatch('notify', [
+                'type' => 'info',
+                'message' => 'Un message est en cours d\'envoi, veuillez patienter avant de générer un résumé.',
+            ]);
+
+            return;
+        }
+
+        // Vérifier si une conversation est sélectionnée
         if (! $this->conversationId) {
             $this->dispatch('notify', [
                 'type' => 'error',
-                'message' => 'Aucune conversation active à résumer',
+                'message' => 'Aucune conversation sélectionnée pour le résumé',
             ]);
 
             return;
@@ -293,6 +337,9 @@ class TokenCounter extends Component
 
         // Activer l'indicateur de chargement
         $this->isSummarizing = true;
+        // Informer les autres composants que le résumé commence
+        $this->dispatch('summarizingStarted');
+
         Log::info('Début de la génération du résumé', [
             'conversation_id' => $this->conversationId,
             'isSummarizing' => $this->isSummarizing,
@@ -337,6 +384,9 @@ class TokenCounter extends Component
         } finally {
             // Désactiver l'indicateur de chargement, peu importe le résultat
             $this->isSummarizing = false;
+            // Informer les autres composants que le résumé est terminé
+            $this->dispatch('summarizingEnded');
+
             Log::info('Fin de la génération du résumé', [
                 'conversation_id' => $this->conversationId,
                 'isSummarizing' => $this->isSummarizing,

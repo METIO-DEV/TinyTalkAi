@@ -38,6 +38,11 @@ class ChatForm extends Component
     protected ConversationMemoryService $memoryService;
 
     /**
+     * Indique si un résumé est en cours dans un autre composant
+     */
+    public bool $isSummarizing = false;
+
+    /**
      * Écoute les événements
      */
     protected $listeners = [
@@ -45,6 +50,8 @@ class ChatForm extends Component
         'conversationSelected' => 'loadConversation',
         'conversationCleared' => 'clearConversation',
         'loadingComplete' => '$refresh', // Ajout de l'événement loadingComplete
+        'summarizingStarted' => 'onSummarizingStarted',
+        'summarizingEnded' => 'onSummarizingEnded',
     ];
 
     /**
@@ -75,6 +82,16 @@ class ChatForm extends Component
     public function updateSelectedModel(string $modelName)
     {
         $this->selectedModel = $modelName;
+
+        // Réinitialiser l'ID de conversation seulement si l'événement vient de la sélection d'un modèle
+        // et non pas du chargement d'une conversation existante
+        if (! $this->conversationId || session('model_selection_source') === 'sidebar') {
+            $this->conversationId = null;
+            session()->forget('selected_conversation_id');
+        }
+
+        // Réinitialiser la source de sélection du modèle
+        session()->forget('model_selection_source');
     }
 
     /**
@@ -130,11 +147,57 @@ class ChatForm extends Component
     }
 
     /**
+     * Appelé quand un résumé commence
+     */
+    public function onSummarizingStarted()
+    {
+        $this->isSummarizing = true;
+    }
+
+    /**
+     * Appelé quand un résumé se termine
+     */
+    public function onSummarizingEnded()
+    {
+        $this->isSummarizing = false;
+    }
+
+    /**
      * Envoie un message
      */
     public function sendMessage()
     {
-        if (empty($this->message) || empty($this->selectedModel)) {
+        // Vérifier si une requête est déjà en cours
+        if ($this->isLoading) {
+            Log::info('Tentative d\'envoi de message ignorée car une requête est déjà en cours');
+
+            $this->dispatch('notify', [
+                'type' => 'info',
+                'message' => 'Une requête est déjà en cours de traitement, veuillez patienter.',
+            ]);
+
+            return;
+        }
+
+        // Vérifier si un résumé est en cours
+        if ($this->isSummarizing) {
+            Log::info('Tentative d\'envoi de message ignorée car un résumé est en cours');
+
+            $this->dispatch('notify', [
+                'type' => 'info',
+                'message' => 'Un résumé est en cours de génération, veuillez patienter.',
+            ]);
+
+            return;
+        }
+
+        // Vérifier si un message est présent
+        if (empty(trim($this->message))) {
+            return;
+        }
+
+        // Vérifier si un modèle est sélectionné
+        if (empty($this->selectedModel)) {
             return;
         }
 
@@ -144,6 +207,8 @@ class ChatForm extends Component
 
             // Activer l'indicateur de chargement
             $this->isLoading = true;
+            // Informer les autres composants que l'envoi commence
+            $this->dispatch('messageLoadingStarted');
 
             // Ajouter le message utilisateur à la liste des messages pour l'affichage immédiat
             $this->dispatch('messageAdded', ['role' => 'user', 'content' => $userMessage]);
@@ -312,6 +377,9 @@ class ChatForm extends Component
         } finally {
             // Désactiver l'indicateur de chargement
             $this->isLoading = false;
+
+            // Informer les autres composants que l'envoi est terminé
+            $this->dispatch('messageLoadingEnded');
 
             // Forcer la mise à jour du composant pour s'assurer que l'état est reflété dans l'UI
             $this->dispatch('loadingComplete');
