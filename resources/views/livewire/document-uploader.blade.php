@@ -77,13 +77,13 @@
                         <!-- Upload de fichier -->
                         <div class="mb-4">
                             <label for="document" class="block text-sm font-medium text-custom-black dark:text-custom-white mb-1">
-                                Fichier (.txt uniquement, max 10MB)
+                                Fichier (.txt, .pdf, .docx uniquement, max 10MB)
                             </label>
                             <input 
                                 type="file" 
                                 id="document" 
                                 wire:model="document" 
-                                accept=".txt"
+                                accept=".txt,.pdf,.docx"
                                 class="w-full border border-custom-mid rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-custom-mid bg-custom-white text-custom-black dark:text-custom-white dark:border-custom-white dark:bg-custom-light-dark-mode"
                                 required
                             >
