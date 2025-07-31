@@ -25,6 +25,7 @@ services:
             - mysql
             - postgresql
             - redis
+            - qdrant
     mysql:
         image: 'mysql/mysql-server:8.0'
         ports:
@@ -65,6 +66,23 @@ services:
             test: ["CMD", "pg_isready", "-q", "-d", "${DB_DATABASE}", "-U", "${DB_USERNAME}"]
             retries: 3
             timeout: 5s
+
+    qdrant:
+        image: 'qdrant/qdrant:latest'
+        ports:
+            - '${FORWARD_QDRANT_PORT:-6333}:6333'
+        volumes:
+            - 'sail-qdrant:/qdrant'
+        networks:
+            - sail
+        healthcheck:
+            test:
+                - CMD
+                - curl
+                - http://localhost:6333/health
+            retries: 3
+            timeout: 5s
+    
     redis:
         image: 'redis:alpine'
         ports:
@@ -87,6 +105,8 @@ volumes:
     sail-mysql:
         driver: local
     sail-postgresql:
+        driver: local
+    sail-qdrant:
         driver: local
     sail-redis:
         driver: local

@@ -5,6 +5,7 @@ namespace App\Livewire;
 use App\Models\Conversation;
 use App\Models\Message;
 use App\Services\ConversationMemoryService;
+use App\Services\RagService;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Log;
@@ -38,28 +39,46 @@ class ChatForm extends Component
     protected ConversationMemoryService $memoryService;
 
     /**
+     * Service RAG pour la recherche de contexte
+     */
+    protected RagService $ragService;
+
+    /**
      * Indique si un résumé est en cours dans un autre composant
      */
     public bool $isSummarizing = false;
 
     /**
-     * Écoute les événements
+     * Indique si le mode RAG est activé
+     */
+    public bool $ragEnabled = true;
+
+    /**
+     * Liste des modèles disponibles
+     */
+    public array $availableModels = [];
+
+    /**
+     * Écouteurs d'événements Livewire
      */
     protected $listeners = [
         'modelSelected' => 'updateSelectedModel',
         'conversationSelected' => 'loadConversation',
         'conversationCleared' => 'clearConversation',
-        'loadingComplete' => '$refresh', // Ajout de l'événement loadingComplete
         'summarizingStarted' => 'onSummarizingStarted',
         'summarizingEnded' => 'onSummarizingEnded',
+        'ragToggled' => 'toggleRag',
+        'documentAdded' => 'handleDocumentAdded',
+        'getAvailableModels' => 'sendAvailableModels',
     ];
 
     /**
      * Constructeur du composant
      */
-    public function boot(ConversationMemoryService $memoryService)
+    public function boot(ConversationMemoryService $memoryService, RagService $ragService)
     {
         $this->memoryService = $memoryService;
+        $this->ragService = $ragService;
     }
 
     /**
@@ -68,12 +87,48 @@ class ChatForm extends Component
     public function mount()
     {
         $this->selectedModel = session('selected_model', '');
+        $this->ragEnabled = session('rag_enabled', true);
 
         // Charger la conversation si une ID est présente dans la session
         $conversationId = session('selected_conversation_id');
         if ($conversationId) {
             $this->loadConversation($conversationId);
         }
+    }
+
+    /**
+     * Active ou désactive le mode RAG
+     */
+    public function toggleRag(bool $enabled)
+    {
+        $this->ragEnabled = $enabled;
+        session(['rag_enabled' => $enabled]);
+    }
+
+    /**
+     * Appelé lorsqu'un document est ajouté
+     */
+    public function handleDocumentAdded($documentId)
+    {
+        // Activer automatiquement le mode RAG après l'ajout d'un document
+        session(['rag_enabled' => true]);
+        $this->ragEnabled = true;
+
+        // Afficher un message de confirmation
+        $this->dispatch('showNotification', [
+            'type' => 'success',
+            'message' => 'Document ajouté avec succès! Le mode RAG a été activé.',
+        ]);
+    }
+
+    /**
+     * Envoie la liste des modèles disponibles aux autres composants
+     */
+    public function sendAvailableModels()
+    {
+        // Cette méthode n'est plus nécessaire car DocumentUploader récupère
+        // directement les modèles d'embedding via RagService
+        // Mais on la garde pour compatibilité avec d'autres composants qui pourraient l'utiliser
     }
 
     /**
@@ -129,17 +184,19 @@ class ChatForm extends Component
                     ->get();
 
                 // Convertir la collection en tableau pour la compatibilité avec le template
+                $messages = [];
                 foreach ($messagesCollection as $message) {
-                    $this->dispatch('messageAdded', [
+                    $messages[] = [
                         'role' => $message->role,
                         'content' => $message->content,
-                    ]);
+                    ];
                 }
 
+                // Émettre un événement pour afficher les messages dans l'interface
+                $this->dispatch('conversationLoaded', $messages);
+
                 // Émettre un événement pour mettre à jour le compteur de tokens
-                if ($conversation->tokens > 0) {
-                    $this->dispatch('tokensUpdated', $conversation->tokens);
-                }
+                $this->dispatch('tokensUpdated', $conversation->tokens);
             }
         } catch (\Exception $e) {
             Log::error('Erreur lors du chargement de la conversation: '.$e->getMessage());
@@ -293,14 +350,54 @@ class ChatForm extends Component
                     'conversation_id' => $conversation->id,
                     'message_count' => count($localWindow),
                 ]);
-            } else {
-                // Si pas de conversation (utilisateur non authentifié), utiliser uniquement le message actuel
-                $messages = [
-                    [
-                        'role' => 'user',
-                        'content' => $userMessage,
-                    ],
-                ];
+            }
+
+            // Si le mode RAG est activé, rechercher du contexte pertinent
+            $contextDocuments = [];
+            $ragInfoMessage = '';
+
+            if ($this->ragEnabled) {
+                Log::info('Mode RAG activé, recherche de contexte pertinent');
+
+                // Récupérer les IDs des documents liés à la conversation courante
+                $documentIds = [];
+                if ($conversation) {
+                    $documentIds = $conversation->getDocumentIds();
+                    Log::info('Documents liés à la conversation', [
+                        'conversation_id' => $conversation->id,
+                        'document_count' => count($documentIds),
+                        'document_ids' => $documentIds,
+                    ]);
+                }
+
+                // Rechercher les documents similaires à la question, filtrés par conversation
+                $contextDocuments = $this->ragService->searchSimilarDocuments($userMessage, 4, $documentIds);
+
+                if (! empty($contextDocuments)) {
+                    Log::info('Contexte RAG trouvé', [
+                        'document_count' => count($contextDocuments),
+                    ]);
+
+                    // Ajouter un message système avec le contexte
+                    $systemPrompt = "Voici des extraits de documents pertinents pour répondre à la question:\n\n";
+
+                    foreach ($contextDocuments as $index => $doc) {
+                        $systemPrompt .= 'Contexte '.($index + 1).":\n".$doc['text']."\n\n";
+                    }
+
+                    $systemPrompt .= "Utilise ces informations pour enrichir ta réponse à la question de l'utilisateur.";
+
+                    // Ajouter le contexte comme message système
+                    array_unshift($messages, [
+                        'role' => 'system',
+                        'content' => $systemPrompt,
+                    ]);
+
+                    // Message d'information pour le log
+                    $ragInfoMessage = ' avec contexte RAG ('.count($contextDocuments).' documents)';
+                } else {
+                    Log::info('Aucun contexte RAG pertinent trouvé');
+                }
             }
 
             // Configuration de l'API Ollama
@@ -308,7 +405,7 @@ class ChatForm extends Component
             $ollamaPort = config('services.ollama.port', '11434');
             $ollamaUrl = 'http://'.$ollamaHost.':'.$ollamaPort.'/api/chat';
 
-            Log::info('Envoi du message à Ollama: '.$ollamaUrl);
+            Log::info('Envoi du message à Ollama'.$ragInfoMessage.': '.$ollamaUrl);
 
             // Préparation du prompt avec le contexte
             $response = Http::timeout(600)->post($ollamaUrl, [
@@ -349,6 +446,8 @@ class ChatForm extends Component
                             'temperature' => $temperature,
                             'max_tokens' => $maxTokens,
                             'tokens_used' => $totalTokens, // Stocker les tokens utilisés
+                            'rag_enabled' => $this->ragEnabled, // Indiquer si le RAG était activé
+                            'rag_documents' => ! empty($contextDocuments) ? count($contextDocuments) : 0, // Nombre de documents RAG utilisés
                         ],
                     ]);
                 }
@@ -382,7 +481,6 @@ class ChatForm extends Component
             $this->dispatch('messageLoadingEnded');
 
             // Forcer la mise à jour du composant pour s'assurer que l'état est reflété dans l'UI
-            $this->dispatch('loadingComplete');
         }
     }
 
