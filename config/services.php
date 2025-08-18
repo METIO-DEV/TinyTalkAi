@@ -35,4 +35,19 @@ return [
         ],
     ],
 
+    /*
+    |--------------------------------------------------------------------------
+    | Ollama API Configuration
+    |--------------------------------------------------------------------------
+    |
+    | Configuration pour l'API Ollama. Dans un environnement Docker (Laravel Sail),
+    | nous utilisons host.docker.internal pour accéder à la machine hôte.
+    | En local, nous utilisons localhost.
+    |
+    */
+    'ollama' => [
+        'host' => env('OLLAMA_HOST', 'host.docker.internal'),
+        'port' => env('OLLAMA_PORT', '11434'),
+    ],
+
 ];
