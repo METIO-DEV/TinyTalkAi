@@ -15,14 +15,14 @@
     <div 
         x-data="{ 
             show: @entangle('isOpen'),
-            closeAfterDelay() {
-                setTimeout(() => {
-                    this.show = false;
-                }, 2000);
+            closeModal() {
+                this.show = false;
+                $wire.closeModal();
             }
         }"
         x-show="show"
-        x-on:closeModalAfterDelay.window="closeAfterDelay()"
+        x-on:closeModal.window="closeModal()"
+        x-init="$watch('show', value => { if (!value) $wire.closeModal(); })"
         x-transition:enter="transition ease-out duration-300"
         x-transition:enter-start="opacity-0"
         x-transition:enter-end="opacity-100"
@@ -33,7 +33,7 @@
         style="display: none;"
     >
         <div class="flex items-center justify-center min-h-screen px-4">
-            <div class="fixed inset-0 bg-black bg-opacity-50 transition-opacity" x-on:click="show = false"></div>
+            <div class="fixed inset-0 bg-black bg-opacity-50 transition-opacity" x-on:click="closeModal()"></div>
             
             <div class="bg-custom-white dark:bg-custom-light-dark-mode rounded-lg overflow-hidden shadow-xl transform transition-all sm:max-w-lg sm:w-full z-10">
                 <div class="px-6 py-4">
@@ -41,7 +41,9 @@
                         <h3 class="text-lg font-medium text-custom-black dark:text-custom-white">
                             Ajouter un document
                         </h3>
-                        <button type="button" x-on:click="show = false" class="text-gray-500 hover:text-gray-700">
+                        <button type="button" 
+                                x-on:click="closeModal()"
+                                class="text-gray-500 hover:text-gray-700">
                             <svg class="h-6 w-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path>
                             </svg>
@@ -65,13 +67,6 @@
                             @error('title') 
                                 <span class="text-red-500 text-xs mt-1">{{ $message }}</span> 
                             @enderror
-                        </div>
-                        
-                        <!-- Note sur le modèle d'embedding utilisé -->
-                        <div class="mb-4">
-                            <p class="text-sm text-custom-black dark:text-custom-white">
-                                <span class="font-medium">Modèle d'embedding utilisé :</span> bge-m3
-                            </p>
                         </div>
                         
                         <!-- Upload de fichier -->
@@ -106,7 +101,7 @@
                         <div class="flex justify-end space-x-2">
                             <button 
                                 type="button" 
-                                x-on:click="show = false"
+                                x-on:click="closeModal()"
                                 class="px-4 py-2 bg-gray-200 text-gray-700 rounded-lg hover:bg-gray-300 transition-colors"
                                 wire:loading.attr="disabled"
                                 wire:target="uploadDocument"

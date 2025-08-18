@@ -274,32 +274,14 @@ class TokenCounter extends Component
     public function summarizeConversation()
     {
         // Vérifier si une requête est déjà en cours
-        if ($this->isSummarizing) {
+        if ($this->isSummarizing || $this->isMessageSending) {
             Log::info('Tentative de résumé ignorée car un résumé est déjà en cours', [
                 'conversation_id' => $this->conversationId,
             ]);
-
-            $this->dispatch('notify', [
-                'type' => 'info',
-                'message' => 'Un résumé est déjà en cours de génération, veuillez patienter.',
-            ]);
-
+            
             return;
         }
 
-        // Vérifier si un envoi de message est en cours
-        if ($this->isMessageSending) {
-            Log::info('Tentative de résumé ignorée car un envoi de message est en cours', [
-                'conversation_id' => $this->conversationId,
-            ]);
-
-            $this->dispatch('notify', [
-                'type' => 'info',
-                'message' => 'Un message est en cours d\'envoi, veuillez patienter avant de générer un résumé.',
-            ]);
-
-            return;
-        }
 
         // Vérifier si une conversation est sélectionnée
         if (! $this->conversationId) {

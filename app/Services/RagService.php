@@ -57,6 +57,14 @@ class RagService
     }
 
     /**
+     * Définit la collection Qdrant à utiliser
+     */
+    public function setQdrantCollection(string $collection): void
+    {
+        $this->qdrantCollection = $collection;
+    }
+
+    /**
      * Découpe un texte en chunks
      */
     public function chunkText(string $text): array
@@ -288,11 +296,32 @@ class RagService
      * @param  string  $query  La requête à rechercher
      * @param  int  $limit  Nombre maximum de résultats à retourner
      * @param  array|null  $documentIds  Liste des IDs de documents à considérer (filtrage par conversation)
+     * @param  string|null  $collection  Nom de la collection à utiliser (si différent de la collection par défaut)
      * @return array Liste des documents similaires avec leurs scores
      */
-    public function searchSimilarDocuments(string $query, int $limit = 4, ?array $documentIds = null): array
+    public function searchSimilarDocuments(string $query, int $limit = 4, ?array $documentIds = null, ?string $collection = null): array
     {
         try {
+            // Si une collection est spécifiée, l'utiliser temporairement
+            $originalCollection = null;
+            if ($collection !== null) {
+                $originalCollection = $this->qdrantCollection;
+                $this->qdrantCollection = $collection;
+                
+                Log::info('Utilisation temporaire de la collection pour la recherche', [
+                    'collection' => $collection,
+                    'query' => $query,
+                ]);
+            }
+
+            // Log pour vérifier quelle collection est effectivement utilisée
+            Log::info('Collection utilisée pour la recherche', [
+                'collection' => $this->qdrantCollection,
+                'original_collection' => $originalCollection,
+                'param_collection' => $collection,
+                'query' => $query,
+            ]);
+
             // Générer l'embedding de la requête
             $embedding = $this->generateEmbedding($query, $this->embeddingModel);
 
@@ -301,6 +330,11 @@ class RagService
                     'query' => $query,
                     'model' => $this->embeddingModel,
                 ]);
+
+                // Restaurer la collection originale si nécessaire
+                if ($originalCollection !== null) {
+                    $this->qdrantCollection = $originalCollection;
+                }
 
                 return [];
             }
@@ -312,7 +346,7 @@ class RagService
                 'limit' => $limit,
                 'with_payload' => true,
                 'with_vector' => false,
-                'score_threshold' => 0.6, // Seuil minimal de score pour filtrer les résultats non pertinents
+                'score_threshold' => 0.20, // Seuil minimal de score pour filtrer les résultats non pertinents
             ];
 
             // Ajouter un filtre sur les IDs de documents si spécifié
@@ -341,7 +375,7 @@ class RagService
 
             Log::info('Requête Qdrant', [
                 'url' => $qdrantUrl,
-                'request_data' => $requestData,
+                'request_data' => $requestData, 
             ]);
 
             $response = Http::post($qdrantUrl, $requestData);
@@ -360,7 +394,7 @@ class RagService
                     $score = $result['score'] ?? 0;
 
                     // Ignorer les résultats avec un score trop bas
-                    if ($score < 0.6) {
+                    if ($score < 0.20) {
                         continue;
                     }
 
@@ -378,12 +412,22 @@ class RagService
                     ]);
                 }
 
+                // Restaurer la collection originale si nécessaire
+                if ($originalCollection !== null) {
+                    $this->qdrantCollection = $originalCollection;
+                }
+
                 return $documents;
             } else {
                 Log::error('Erreur lors de la recherche de documents: '.$response->body(), [
                     'status' => $response->status(),
                     'request_data' => $requestData,
                 ]);
+
+                // Restaurer la collection originale si nécessaire
+                if ($originalCollection !== null) {
+                    $this->qdrantCollection = $originalCollection;
+                }
 
                 return [];
             }
@@ -393,6 +437,11 @@ class RagService
                 'trace' => $e->getTraceAsString(),
             ]);
 
+            // Restaurer la collection originale si nécessaire
+            if (isset($originalCollection)) {
+                $this->qdrantCollection = $originalCollection;
+            }
+
             return [];
         }
     }
@@ -400,13 +449,21 @@ class RagService
     /**
      * Traite un document pour le RAG
      */
-    public function processDocument(string $documentId, string $content, array $metadata = []): bool
+    public function processDocument(string $documentId, string $content, array $metadata = [], ?string $collection = null): bool
     {
         try {
+            // Si une collection est spécifiée, l'utiliser temporairement
+            $originalCollection = null;
+            if ($collection !== null) {
+                $originalCollection = $this->qdrantCollection;
+                $this->qdrantCollection = $collection;
+            }
+
             Log::info('Traitement du document', [
                 'documentId' => $documentId,
                 'contentLength' => strlen($content),
                 'metadata' => $metadata,
+                'collection' => $this->qdrantCollection,
             ]);
 
             // Vérifier que la collection existe, sinon la créer
@@ -446,10 +503,21 @@ class RagService
                 'documentId' => $documentId,
                 'totalChunks' => count($chunks),
                 'successfulChunks' => $successCount,
+                'collection' => $this->qdrantCollection,
             ]);
+
+            // Restaurer la collection originale si nécessaire
+            if ($originalCollection !== null) {
+                $this->qdrantCollection = $originalCollection;
+            }
 
             return $successCount > 0;
         } catch (\Exception $e) {
+            // Restaurer la collection originale en cas d'erreur
+            if (isset($originalCollection)) {
+                $this->qdrantCollection = $originalCollection;
+            }
+
             Log::error('Exception lors du traitement du document', [
                 'message' => $e->getMessage(),
                 'trace' => $e->getTraceAsString(),

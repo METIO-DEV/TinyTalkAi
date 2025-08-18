@@ -119,7 +119,7 @@ class DocumentUploader extends Component
     protected $listeners = [
         'openDocumentUploader' => 'openModal',
         'conversationSelected' => 'updateConversationId',
-        'closeModalAfterDelay' => 'closeModalAfterDelay',
+        'closeModal' => 'closeModal',
     ];
 
     /**
@@ -273,6 +273,8 @@ class DocumentUploader extends Component
                         $this->dispatch('conversationSelected', $this->conversationId);
 
                         $this->dispatch('conversationUpdated', $this->conversationId);
+
+                        $this->dispatch('closeModal');
 
                     } catch (\Exception $e) {
                         Log::error('DocumentUploader: erreur lors de la création de la conversation: ' . $e->getMessage(), [

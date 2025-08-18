@@ -1,17 +1,17 @@
-<div class="flex items-center justify-between">
+<div class="flex flex-row gap-6 items-center justify-center">
   <div class="flex flex-col">
       <span class="text-sm font-medium">Mode RAG</span>
       <span class="text-xs text-gray-500">Enrichit les réponses avec le contexte des documents</span>
   </div>
 
   <!-- Toggle switch -->
-  <button
-      x-data="{ enabled: @js($enabled) }"
-      @click="enabled = !enabled; $wire.toggle()"
-      class="relative inline-flex h-6 w-11 items-center rounded-full transition-colors focus:outline-none focus:ring-2 focus:ring-gray-400 focus:ring-offset-2"
-      :class="{ 'bg-black': enabled, 'bg-gray-300': !enabled }"
-      aria-pressed="enabled"
-  >
+    <button
+        wire:click="toggle"
+        x-data="{ enabled: @entangle('enabled').live }"
+        :class="{ 'bg-black': enabled, 'bg-gray-300': !enabled }"
+        aria-pressed="enabled"
+        class="relative inline-flex h-6 w-11 items-center rounded-full transition-colors"
+    >
       <span class="absolute right-2 flex items-center justify-center" aria-hidden="true">
           <span
               class="block h-2.5 w-2.5 rounded-full border transition-colors"

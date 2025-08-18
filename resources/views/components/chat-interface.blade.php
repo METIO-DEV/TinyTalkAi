@@ -8,7 +8,7 @@
         @livewire('chat-form')
         
         <!-- Compteur de tokens -->
-        <div class="mt-2 flex flex-row justify-between items-center">
+        <div class="mt-2 flex flex-row justify-around items-center">
             <livewire:token-counter />
             <livewire:rag-toggle />
         </div>

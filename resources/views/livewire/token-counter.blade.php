@@ -1,12 +1,12 @@
-<div class="token-counter w-[80%] mx-auto">
+<div class="token-counter w-[60%]">
     @if($selectedModel)
-        <div class="flex flex-col space-y-2">
-            <div class="flex justify-center gap-8 items-center text-xs text-custom-black dark:text-custom-white">
+        <div class="flex flex-col">
+            <div class="flex flex-row justify-center gap-8 items-center text-xs text-custom-black dark:text-custom-white">
                 <span>{{ $tokensUsed }} / {{ $tokenLimit ?? '?' }} tokens</span>
                 <div class="w-[60%] bg-custom-mid rounded-full h-4 dark:bg-gray-700 flex items-center overflow-hidden">
                     <div class="h-4 rounded-full transition-all duration-300 ease-in-out" 
                          style="width: {{ $this->getTokenPercentageProperty() }}%; background-color: {{ $this->getProgressColorProperty() }}"></div>
-                    <span class="text-xs relative right-6 text-custom-black dark:text-custom-white">{{ $this->getTokenPercentageProperty() }}%</span>
+                    <span class="text-xs relative right-8 text-custom-black dark:text-custom-white">{{ $this->getTokenPercentageProperty() }}%</span>
                 </div>
                 <button 
                     wire:click="summarizeConversation" 

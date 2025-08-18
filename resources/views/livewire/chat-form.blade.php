@@ -18,7 +18,7 @@
                       }
                   }
               }"
-              x-on:submit="addUserMessage()"
+              x-on:submit.prevent="addUserMessage()"
               class="flex gap-2 w-full justify-between items-stretch">
             <textarea 
                 wire:model="message" 
