@@ -7,6 +7,9 @@
 
     <title>{{ config('app.name', 'TinyTalkAI') }}</title>
 
+    <!-- Favicon -->
+    <link rel="icon" href="{{ asset('TinyTalkAi_Logo.png') }}" type="image/png">
+
     <!-- Fonts -->
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
