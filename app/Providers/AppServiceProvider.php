@@ -2,7 +2,6 @@
 
 namespace App\Providers;
 
-use App\Services\QdrantCollectionsService;
 use Illuminate\Support\ServiceProvider;
 
 class AppServiceProvider extends ServiceProvider
@@ -12,10 +11,7 @@ class AppServiceProvider extends ServiceProvider
      */
     public function register(): void
     {
-        // Enregistrement du service QdrantCollectionsService comme singleton
-        $this->app->singleton(QdrantCollectionsService::class, function ($app) {
-            return new QdrantCollectionsService;
-        });
+        //
     }
 
     /**
