@@ -1,0 +1,99 @@
+@import '../../../../vendor/filament/filament/resources/css/theme.css';
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* Personnalisation des couleurs TinyTalkAI */
+:root {
+    --color-primary-50: 245 245 245;
+    --color-primary-100: 229 229 229;
+    --color-primary-200: 212 212 212;
+    --color-primary-300: 189 189 189;
+    --color-primary-400: 158 158 158;
+    --color-primary-500: 107 107 107;
+    --color-primary-600: 66 66 66;
+    --color-primary-700: 33 33 33;
+    --color-primary-800: 23 23 23;
+    --color-primary-900: 10 10 10;
+    --color-primary-950: 0 0 0;
+}
+
+/* Personnalisation du logo */
+.fi-logo {
+    @apply h-10;
+}
+
+/* Améliorations responsive */
+@media (max-width: 1024px) {
+    .fi-sidebar {
+        @apply w-64 transition-all duration-300 ease-in-out;
+    }
+    
+    .fi-sidebar-collapse-button {
+        @apply opacity-100 visible;
+    }
+}
+
+/* Amélioration de la sidebar */
+.fi-sidebar {
+    @apply transition-all duration-300 ease-in-out;
+}
+
+.fi-sidebar-open {
+    @apply translate-x-0;
+}
+
+.fi-sidebar-closed {
+    @apply -translate-x-full lg:translate-x-0 lg:w-16;
+}
+
+.fi-sidebar-item {
+    @apply transition-all duration-300;
+}
+
+.fi-sidebar-item-label {
+    @apply transition-opacity duration-300;
+}
+
+.fi-sidebar-closed .fi-sidebar-item-label {
+    @apply lg:opacity-0;
+}
+
+@media (max-width: 768px) {
+    .fi-main {
+        @apply px-2;
+    }
+    
+    .fi-topbar {
+        @apply px-2;
+    }
+    
+    .fi-sidebar-header {
+        @apply px-2;
+    }
+    
+    .fi-sidebar {
+        @apply fixed top-0 left-0 h-full z-50 shadow-xl;
+    }
+    
+    .fi-sidebar-open {
+        @apply translate-x-0;
+    }
+    
+    .fi-sidebar-closed {
+        @apply -translate-x-full;
+    }
+}
+
+/* Fix pour les tableaux responsives */
+.fi-ta-content {
+    @apply overflow-x-auto;
+}
+
+/* Amélioration des widgets sur petits écrans */
+@media (max-width: 640px) {
+    .fi-widget {
+        @apply p-2;
+    }
+}

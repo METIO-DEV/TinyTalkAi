@@ -47,4 +47,7 @@ Route::redirect('chat', '/');
 // Redirection vers la page de login pour éviter l'erreur 404 après expiration de session
 Route::redirect('login', '/login')->name('login');
 
+// Ne pas définir de routes personnalisées pour Filament ici
+// Filament gère ses propres routes via son système interne
+
 require __DIR__.'/auth.php';
