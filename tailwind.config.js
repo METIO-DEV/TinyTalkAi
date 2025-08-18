@@ -23,17 +23,6 @@ export default {
                 'custom-light-dark-mode': '#323232',
                 'custom-white-dark-mode': '#141313',
                 'custom-mid-dark-mode': '#606060',
-                'stroke-dark': '#828282',
-                'dark-bg': '#121212',        // Fond principal très sombre
-                'dark-sidebar': '#1E1E1E',   // Fond de la sidebar
-                'dark-bubble': '#2A2A2A',    // Bulles de message IA
-                'dark-user-bubble': '#000000', // Bulles de message utilisateur
-                'dark-text': '#FFFFFF',      // Texte en mode sombre
-                'dark-border': '#333333',    // Bordures en mode sombre
-                'dark-hover': '#333333',     // Couleur de survol en mode sombre
-                'custom-green': '#22C55E',
-                'custom-yellow': '#D97706',
-                'custom-red': '#EF4444',
             },
             padding: {
                 '7': '1.75rem',
