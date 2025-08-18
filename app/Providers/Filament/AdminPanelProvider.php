@@ -64,10 +64,6 @@ class AdminPanelProvider extends PanelProvider
             ->brandName('TinyTalkAI Admin')
             ->sidebarWidth('18rem') // Largeur plus importante pour la sidebar
             ->collapsibleNavigationGroups(false) // Groupes toujours développés
-            ->navigationGroups([
-                'Gestion',
-                'Configuration',
-            ])
             ->navigationItems([
                 NavigationItem::make('Dashboard')
                     ->icon('heroicon-o-home')
@@ -88,7 +84,6 @@ class AdminPanelProvider extends PanelProvider
                         
                         .fi-sidebar-item {
                             margin-bottom: 0.5rem;
-                            border-radius: 0.5rem;
                             transition: all 0.3s ease;
                         }
                         
@@ -97,7 +92,7 @@ class AdminPanelProvider extends PanelProvider
                         }
                         
                         .fi-sidebar-item-active {
-                            border-left: 4px solid white;
+                            border-left: 3px solid white;
                         }
                         
                         /* Amélioration du contraste des textes */
