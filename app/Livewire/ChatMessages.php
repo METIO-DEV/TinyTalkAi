@@ -33,7 +33,7 @@ class ChatMessages extends Component
         'conversationSelected' => 'loadConversation',
         'conversationCleared' => 'clearConversation',
         'messageAdded' => 'addMessage',
-        'loadingComplete' => '$refresh',
+        'conversationLoaded' => 'handleConversationLoaded',
     ];
 
     /**
@@ -88,19 +88,8 @@ class ChatMessages extends Component
                 $this->selectedModel = $conversation->model_name;
             }
 
-            // Récupérer les messages de la conversation
-            $messagesCollection = Message::where('conversation_id', $conversationId)
-                ->orderBy('created_at', 'asc')
-                ->get();
-
-            // Convertir la collection en tableau pour la compatibilité avec le template
-            $this->messages = [];
-            foreach ($messagesCollection as $message) {
-                $this->messages[] = [
-                    'role' => $message->role,
-                    'content' => $message->content,
-                ];
-            }
+            // Note: Les messages seront chargés via l'événement conversationLoaded
+            // émis par ChatForm pour éviter le double chargement
         } catch (\Exception $e) {
             Log::error('ChatMessages: Erreur lors du chargement de la conversation: '.$e->getMessage());
             $this->messages[] = [
@@ -125,6 +114,14 @@ class ChatMessages extends Component
     public function addMessage(array $message)
     {
         $this->messages[] = $message;
+    }
+
+    /**
+     * Gère les messages chargés depuis une conversation
+     */
+    public function handleConversationLoaded(array $messages)
+    {
+        $this->messages = $messages;
     }
 
     public function render()

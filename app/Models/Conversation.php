@@ -4,6 +4,7 @@ namespace App\Models;
 
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Database\Eloquent\Relations\HasMany;
 
 class Conversation extends Model
 {
@@ -38,5 +39,21 @@ class Conversation extends Model
     public function messages()
     {
         return $this->hasMany(Message::class);
+    }
+
+    /**
+     * Relation avec les documents associés à cette conversation.
+     */
+    public function documents(): HasMany
+    {
+        return $this->hasMany(ConversationDocument::class);
+    }
+
+    /**
+     * Récupère les IDs des documents associés à cette conversation.
+     */
+    public function getDocumentIds(): array
+    {
+        return $this->documents()->pluck('document_id')->toArray();
     }
 }

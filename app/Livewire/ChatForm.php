@@ -5,6 +5,7 @@ namespace App\Livewire;
 use App\Models\Conversation;
 use App\Models\Message;
 use App\Services\ConversationMemoryService;
+use App\Services\RagService;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Log;
@@ -38,28 +39,53 @@ class ChatForm extends Component
     protected ConversationMemoryService $memoryService;
 
     /**
+     * Service RAG pour la recherche de contexte
+     */
+    protected RagService $ragService;
+
+    /**
      * Indique si un résumé est en cours dans un autre composant
      */
     public bool $isSummarizing = false;
 
     /**
-     * Écoute les événements
+     * Indique si le mode RAG est activé
+     */
+    public bool $ragEnabled = true;
+
+    /**
+     * Liste des modèles disponibles
+     */
+    public array $availableModels = [];
+
+    /**
+     * Nom de la collection Qdrant sélectionnée
+     */
+    public ?string $selectedCollection = null;
+
+    /**
+     * Écouteurs d'événements Livewire
      */
     protected $listeners = [
         'modelSelected' => 'updateSelectedModel',
         'conversationSelected' => 'loadConversation',
         'conversationCleared' => 'clearConversation',
-        'loadingComplete' => '$refresh', // Ajout de l'événement loadingComplete
         'summarizingStarted' => 'onSummarizingStarted',
         'summarizingEnded' => 'onSummarizingEnded',
+        'ragToggled' => 'toggleRag',
+        'documentAdded' => 'handleDocumentAdded',
+        'getAvailableModels' => 'sendAvailableModels',
+        'collectionSelected' => 'updateSelectedCollection',
+        'messageLoadingStarted' => '$refresh',
     ];
 
     /**
      * Constructeur du composant
      */
-    public function boot(ConversationMemoryService $memoryService)
+    public function boot(ConversationMemoryService $memoryService, RagService $ragService)
     {
         $this->memoryService = $memoryService;
+        $this->ragService = $ragService;
     }
 
     /**
@@ -68,12 +94,49 @@ class ChatForm extends Component
     public function mount()
     {
         $this->selectedModel = session('selected_model', '');
+        $this->ragEnabled = session('rag_enabled', true);
+        $this->selectedCollection = session('selected_collection', null);
 
         // Charger la conversation si une ID est présente dans la session
         $conversationId = session('selected_conversation_id');
         if ($conversationId) {
             $this->loadConversation($conversationId);
         }
+    }
+
+    /**
+     * Active ou désactive le mode RAG
+     */
+    public function toggleRag(bool $enabled)
+    {
+        $this->ragEnabled = $enabled;
+        session(['rag_enabled' => $enabled]);
+    }
+
+    /**
+     * Appelé lorsqu'un document est ajouté
+     */
+    public function handleDocumentAdded($documentId)
+    {
+        // Activer automatiquement le mode RAG après l'ajout d'un document
+        session(['rag_enabled' => true]);
+        $this->ragEnabled = true;
+
+        // Afficher un message de confirmation
+        $this->dispatch('showNotification', [
+            'type' => 'success',
+            'message' => 'Document ajouté avec succès! Le mode RAG a été activé.',
+        ]);
+    }
+
+    /**
+     * Envoie la liste des modèles disponibles aux autres composants
+     */
+    public function sendAvailableModels()
+    {
+        // Cette méthode n'est plus nécessaire car DocumentUploader récupère
+        // directement les modèles d'embedding via RagService
+        // Mais on la garde pour compatibilité avec d'autres composants qui pourraient l'utiliser
     }
 
     /**
@@ -92,6 +155,30 @@ class ChatForm extends Component
 
         // Réinitialiser la source de sélection du modèle
         session()->forget('model_selection_source');
+    }
+
+    /**
+     * Met à jour la collection Qdrant sélectionnée
+     */
+    public function updateSelectedCollection(?string $collectionName)
+    {
+        $this->selectedCollection = $collectionName;
+
+        // Stocker la collection sélectionnée dans la session
+        session(['selected_collection' => $collectionName]);
+
+        Log::info('Collection sélectionnée mise à jour dans ChatForm', [
+            'collection' => $collectionName,
+            'session_value' => session('selected_collection'),
+        ]);
+
+        // Définir explicitement la collection dans le RagService
+        if ($collectionName) {
+            $this->ragService->setQdrantCollection($collectionName);
+            Log::info('Collection définie dans RagService', [
+                'collection' => $collectionName,
+            ]);
+        }
     }
 
     /**
@@ -129,17 +216,19 @@ class ChatForm extends Component
                     ->get();
 
                 // Convertir la collection en tableau pour la compatibilité avec le template
+                $messages = [];
                 foreach ($messagesCollection as $message) {
-                    $this->dispatch('messageAdded', [
+                    $messages[] = [
                         'role' => $message->role,
                         'content' => $message->content,
-                    ]);
+                    ];
                 }
 
+                // Émettre un événement pour afficher les messages dans l'interface
+                $this->dispatch('conversationLoaded', $messages);
+
                 // Émettre un événement pour mettre à jour le compteur de tokens
-                if ($conversation->tokens > 0) {
-                    $this->dispatch('tokensUpdated', $conversation->tokens);
-                }
+                $this->dispatch('tokensUpdated', $conversation->tokens);
             }
         } catch (\Exception $e) {
             Log::error('Erreur lors du chargement de la conversation: '.$e->getMessage());
@@ -168,24 +257,12 @@ class ChatForm extends Component
     public function sendMessage()
     {
         // Vérifier si une requête est déjà en cours
-        if ($this->isLoading) {
+        if ($this->isLoading || $this->isSummarizing) {
             Log::info('Tentative d\'envoi de message ignorée car une requête est déjà en cours');
 
             $this->dispatch('notify', [
                 'type' => 'info',
                 'message' => 'Une requête est déjà en cours de traitement, veuillez patienter.',
-            ]);
-
-            return;
-        }
-
-        // Vérifier si un résumé est en cours
-        if ($this->isSummarizing) {
-            Log::info('Tentative d\'envoi de message ignorée car un résumé est en cours');
-
-            $this->dispatch('notify', [
-                'type' => 'info',
-                'message' => 'Un résumé est en cours de génération, veuillez patienter.',
             ]);
 
             return;
@@ -201,14 +278,14 @@ class ChatForm extends Component
             return;
         }
 
+        // Activer l'indicateur de chargement
+        $this->isLoading = true;
+        // Informer les autres composants que l'envoi commence
+        $this->dispatch('messageLoadingStarted');
+
         try {
             // Stocker le message avant de le vider
             $userMessage = $this->message;
-
-            // Activer l'indicateur de chargement
-            $this->isLoading = true;
-            // Informer les autres composants que l'envoi commence
-            $this->dispatch('messageLoadingStarted');
 
             // Ajouter le message utilisateur à la liste des messages pour l'affichage immédiat
             $this->dispatch('messageAdded', ['role' => 'user', 'content' => $userMessage]);
@@ -293,22 +370,145 @@ class ChatForm extends Component
                     'conversation_id' => $conversation->id,
                     'message_count' => count($localWindow),
                 ]);
-            } else {
-                // Si pas de conversation (utilisateur non authentifié), utiliser uniquement le message actuel
-                $messages = [
-                    [
-                        'role' => 'user',
-                        'content' => $userMessage,
-                    ],
-                ];
             }
+
+            // Préparer le contexte RAG si activé
+            $contextDocuments = [];
+            $ragInfoMessage = '';
+
+            // Logs de diagnostic pour le RAG
+            Log::info('Diagnostic RAG avant vérification des conditions', [
+                'rag_enabled' => $this->ragEnabled,
+                'rag_enabled_type' => gettype($this->ragEnabled),
+                'selected_collection' => $this->selectedCollection,
+                'selected_collection_type' => gettype($this->selectedCollection),
+                'session_collection' => session('selected_collection'),
+                'session_rag_enabled' => session('rag_enabled'),
+            ]);
+
+            if ($this->ragEnabled) {
+                // Log de diagnostic pour la collection sélectionnée
+                Log::info('État RAG avant recherche', [
+                    'rag_enabled' => $this->ragEnabled,
+                    'selected_collection' => $this->selectedCollection,
+                    'session_collection' => session('selected_collection'),
+                    'conversation_id' => $this->conversationId,
+                ]);
+
+                // Déterminer le mode RAG à utiliser (collection ou conversation)
+                if (! empty($this->selectedCollection)) {
+                    // Mode RAG par collection
+                    Log::info('Utilisation du RAG par collection', [
+                        'collection' => $this->selectedCollection,
+                        'query' => $userMessage,
+                    ]);
+
+                    // Log juste avant l'appel à searchSimilarDocuments
+                    Log::info('Paramètres de recherche RAG par collection', [
+                        'collection' => $this->selectedCollection,
+                        'query' => $userMessage,
+                        'limit' => 4,
+                        'document_ids' => null,
+                    ]);
+
+                    // Rechercher dans la collection spécifiée
+                    $contextDocuments = $this->ragService->searchSimilarDocuments(
+                        $userMessage,
+                        4,
+                        null,
+                        $this->selectedCollection
+                    );
+
+                    if (! empty($contextDocuments)) {
+                        Log::info('Documents trouvés dans la collection', [
+                            'collection' => $this->selectedCollection,
+                            'document_count' => count($contextDocuments),
+                        ]);
+
+                        $ragInfoMessage = ' avec contexte RAG (collection: '.$this->selectedCollection.', '.count($contextDocuments).' documents)';
+                    }
+                } elseif ($conversation) {
+                    // Mode RAG par conversation (existant)
+                    $documentIds = [];
+                    if ($conversation) {
+                        $documentIds = $conversation->getDocumentIds();
+                        Log::info('Documents associés à la conversation', [
+                            'conversation_id' => $conversation->id,
+                            'document_count' => count($documentIds),
+                            'document_ids' => $documentIds,
+                        ]);
+                    }
+
+                    // Rechercher les documents pertinents uniquement si des documents sont liés à la conversation
+                    if (! empty($documentIds)) {
+                        $contextDocuments = $this->ragService->searchSimilarDocuments($userMessage, 4, $documentIds);
+
+                        if (! empty($contextDocuments)) {
+                            Log::info('Documents pertinents trouvés', [
+                                'document_count' => count($contextDocuments),
+                                'query' => $userMessage,
+                            ]);
+
+                            // Ajouter les informations sur les documents trouvés dans les logs
+                            foreach ($contextDocuments as $index => $doc) {
+                                Log::info("Document RAG #{$index}", [
+                                    'document_id' => $doc['document_id'],
+                                    'score' => $doc['score'],
+                                    'text_preview' => substr($doc['text'], 0, 100).'...',
+                                ]);
+                            }
+
+                            $ragInfoMessage = ' avec contexte RAG ('.count($contextDocuments).' documents)';
+                        }
+                    } else {
+                        Log::info('Aucun document lié à la conversation, recherche RAG ignorée', [
+                            'conversation_id' => $conversation->id,
+                        ]);
+
+                        // Prompt spécifique pour informer l'utilisateur qu'aucun document n'est lié
+                        $systemPrompt = '<<<SYSTEM
+                            📌 Aucun document n’est actuellement associé à cette conversation alors que le mode RAG est activé.
+
+                            ℹ️ Tant qu’aucun document n’est disponible et que RAG reste actif, **ne génère pas de réponse de fond basée sur tes connaissances internes**. Contente-toi d’informer l’utilisateur de la situation et de lui proposer les options ci-dessous.
+
+                            ### Options à proposer à l’utilisateur
+                            1. **Joindre un ou plusieurs documents** pertinents à cette conversation pour qu’ils puissent être pris en compte dans la recherche.
+                            2. **Sélectionner une collection documentaire** existante dans les paramètres, tout en gardant le mode RAG activé.
+                            3. **Désactiver temporairement le mode RAG** afin d’obtenir une réponse fondée uniquement sur les connaissances générales du modèle.
+
+                            SYSTEM';
+                    }
+                }
+            }
+
+            // Préparer le prompt enrichi avec le contexte RAG si disponible
+            if (! isset($systemPrompt)) {
+                $systemPrompt = '';
+                if (! empty($contextDocuments)) {
+                    $systemPrompt = "Voici des extraits de documents pertinents pour répondre à la question:\n\n";
+
+                    foreach ($contextDocuments as $index => $doc) {
+                        $systemPrompt .= 'Contexte '.($index + 1).":\n".$doc['text']."\n\n";
+                    }
+
+                    $systemPrompt .= "Utilise ces informations pour enrichir ta réponse à la question de l'utilisateur.";
+                } else {
+                    $systemPrompt = "Aucun document pertinent n'a été trouvé dans la base de connaissances pour cette question. Commence ta réponse en indiquant brièvement que tu réponds selon tes connaissances générales car aucune information spécifique n'a été trouvée dans les documents fournis par l'utilisateur. Puis réponds au mieux à la question posée.";
+                }
+            }
+
+            // Ajouter le contexte comme message système
+            array_unshift($messages, [
+                'role' => 'system',
+                'content' => $systemPrompt,
+            ]);
 
             // Configuration de l'API Ollama
             $ollamaHost = config('services.ollama.host', 'localhost');
             $ollamaPort = config('services.ollama.port', '11434');
             $ollamaUrl = 'http://'.$ollamaHost.':'.$ollamaPort.'/api/chat';
 
-            Log::info('Envoi du message à Ollama: '.$ollamaUrl);
+            Log::info('Envoi du message à Ollama'.$ragInfoMessage.': '.$ollamaUrl);
 
             // Préparation du prompt avec le contexte
             $response = Http::timeout(600)->post($ollamaUrl, [
@@ -349,6 +549,8 @@ class ChatForm extends Component
                             'temperature' => $temperature,
                             'max_tokens' => $maxTokens,
                             'tokens_used' => $totalTokens, // Stocker les tokens utilisés
+                            'rag_enabled' => $this->ragEnabled, // Indiquer si le RAG était activé
+                            'rag_documents' => ! empty($contextDocuments) ? count($contextDocuments) : 0, // Nombre de documents RAG utilisés
                         ],
                     ]);
                 }
@@ -381,8 +583,6 @@ class ChatForm extends Component
             // Informer les autres composants que l'envoi est terminé
             $this->dispatch('messageLoadingEnded');
 
-            // Forcer la mise à jour du composant pour s'assurer que l'état est reflété dans l'UI
-            $this->dispatch('loadingComplete');
         }
     }
 

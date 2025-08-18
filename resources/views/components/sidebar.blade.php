@@ -2,7 +2,10 @@
 <div class="bg-custom-light dark:bg-custom-white-dark-mode dark:text-custom-white h-full w-full pl-6 pt-6 pb-6 flex flex-col overflow-hidden">
     <div class="mb-6">
         <div class="flex justify-between items-center mb-4">
-            <h2 class="text-xl font-bold text-custom-black dark:text-custom-white">TinyTalk AI</h2>
+            <div class="flex items-center gap-2">
+                <x-application-logo class="w-14" />
+                <h2 class="text-xl font-bold text-custom-black dark:text-custom-white">TinyTalk AI</h2>
+            </div>
             <div class="flex items-center">
                 <div class="relative" id="profile-dropdown">
                     <button id="profile-dropdown-button" class="inline-flex items-center px-3 py-2 border border-transparent text-sm leading-4 font-medium rounded-md text-custom-black bg-custom-white dark:bg-custom-light-dark-mode dark:text-custom-white hover:bg-custom-light-dark-mode dark:hover:bg-custom-mid-dark-mode focus:outline-none transition ease-in-out duration-150">
@@ -49,6 +52,24 @@
         </div>
         <div id="models-section" class="space-y-2">
             @livewire('model-selector')
+        </div>
+    </div>
+
+
+    <!-- Section Collections -->
+    <div class="mb-6">
+        <div class="flex items-center justify-between mb-4">
+            <h3 class="text-sm font-semibold text-custom-black dark:text-custom-white uppercase tracking-wider">
+                <button class="flex items-center w-full text-left focus:outline-none" data-collapse-toggle="collections-section">
+                    <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 mr-1 transform transition-transform" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7" />
+                    </svg>
+                    Collections
+                </button>
+            </h3>
+        </div>
+        <div id="collections-section" class="space-y-2">
+            @livewire('collection')
         </div>
     </div>
     

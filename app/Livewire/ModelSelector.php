@@ -2,6 +2,7 @@
 
 namespace App\Livewire;
 
+use App\Services\RagService;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Log;
 use Livewire\Component;
@@ -19,6 +20,11 @@ class ModelSelector extends Component
     public array $availableModels = [];
 
     /**
+     * Instance du service RAG
+     */
+    protected RagService $ragService;
+
+    /**
      * Écoute les événements
      */
     protected $listeners = [
@@ -30,6 +36,9 @@ class ModelSelector extends Component
      */
     public function mount()
     {
+        // Initialiser le service RAG
+        $this->ragService = new RagService;
+
         // Récupérer le modèle sélectionné depuis la session
         $this->selectedModel = session('selected_model', '');
 
@@ -43,26 +52,36 @@ class ModelSelector extends Component
     private function fetchAvailableModels()
     {
         try {
+            // Utiliser RagService pour récupérer uniquement les modèles de génération
+            $models = $this->ragService->getAvailableGenerationModels();
+
+            // Traitement des modèles pour ajouter les informations nécessaires
+            $this->availableModels = [];
+
             // Récupération des paramètres de configuration avec valeurs par défaut
             $ollamaHost = config('services.ollama.host', 'host.docker.internal');
             $ollamaPort = config('services.ollama.port', '11434');
             $ollamaUrl = 'http://'.$ollamaHost.':'.$ollamaPort.'/api/tags';
 
-            // Requête HTTP avec timeout court pour éviter de bloquer l'interface utilisateur
+            // Requête HTTP pour obtenir les détails des modèles (taille, etc.)
             $response = Http::timeout(5)->get($ollamaUrl);
 
-            // Vérification du succès de la requête (code 2xx)
             if ($response->successful()) {
                 $data = $response->json();
-                $models = $data['models'] ?? [];
+                $modelDetails = $data['models'] ?? [];
 
-                // Traitement des modèles pour ajouter les informations nécessaires
-                $this->availableModels = [];
-                foreach ($models as $model) {
-                    // Ajouter le modèle à la liste avec les informations de base
+                // Créer un tableau associatif pour un accès facile aux détails
+                $modelDetailsMap = [];
+                foreach ($modelDetails as $model) {
+                    $modelDetailsMap[$model['name']] = $model;
+                }
+
+                // Ajouter uniquement les modèles de génération avec leurs détails
+                foreach ($models as $modelName) {
+                    $details = $modelDetailsMap[$modelName] ?? [];
                     $this->availableModels[] = [
-                        'name' => $model['name'],
-                        'size' => $model['size'] ?? 0,
+                        'name' => $modelName,
+                        'size' => $details['size'] ?? 0,
                     ];
                 }
             }
