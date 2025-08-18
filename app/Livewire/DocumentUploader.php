@@ -251,12 +251,12 @@ class DocumentUploader extends Component
                 Log::info('DocumentUploader: document traité avec succès');
 
                 // Si aucune conversation n'est sélectionnée et que l'utilisateur est connecté, en créer une nouvelle
-                if (!$this->conversationId && Auth::check()) {
+                if (! $this->conversationId && Auth::check()) {
                     try {
                         // Créer une nouvelle conversation avec le titre du document
                         $conversation = Conversation::create([
                             'user_id' => Auth::id(),
-                            'title' => 'Document: ' . $this->title,
+                            'title' => 'Document: '.$this->title,
                             'model_name' => session('selected_model'),
                             'tokens' => 0,
                         ]);
@@ -277,7 +277,7 @@ class DocumentUploader extends Component
                         $this->dispatch('closeModal');
 
                     } catch (\Exception $e) {
-                        Log::error('DocumentUploader: erreur lors de la création de la conversation: ' . $e->getMessage(), [
+                        Log::error('DocumentUploader: erreur lors de la création de la conversation: '.$e->getMessage(), [
                             'exception' => get_class($e),
                             'trace' => $e->getTraceAsString(),
                         ]);
@@ -317,11 +317,11 @@ class DocumentUploader extends Component
                 $this->statusMessage = 'Erreur lors du traitement du document.';
             }
         } catch (\Exception $e) {
-            Log::error('DocumentUploader: erreur lors du traitement du document: ' . $e->getMessage(), [
+            Log::error('DocumentUploader: erreur lors du traitement du document: '.$e->getMessage(), [
                 'exception' => get_class($e),
                 'trace' => $e->getTraceAsString(),
             ]);
-            $this->statusMessage = 'Une erreur est survenue: ' . $e->getMessage();
+            $this->statusMessage = 'Une erreur est survenue: '.$e->getMessage();
         } finally {
             $this->isProcessing = false;
         }
@@ -329,19 +329,19 @@ class DocumentUploader extends Component
 
     /**
      * Extrait le texte d'un fichier PDF
-     * 
-     * @param string $filePath Chemin complet vers le fichier PDF
+     *
+     * @param  string  $filePath  Chemin complet vers le fichier PDF
      * @return string Le texte extrait du PDF
      */
     protected function extractTextFromPdf(string $filePath): string
     {
         // Vérifier si la bibliothèque est installée
-        if (!class_exists('\Smalot\PdfParser\Parser')) {
+        if (! class_exists('\Smalot\PdfParser\Parser')) {
             throw new \Exception('La bibliothèque smalot/pdfparser n\'est pas installée. Exécutez: composer require smalot/pdfparser');
         }
 
         // Créer le parser
-        $parser = new \Smalot\PdfParser\Parser();
+        $parser = new \Smalot\PdfParser\Parser;
 
         try {
             // Analyser le PDF
@@ -352,21 +352,21 @@ class DocumentUploader extends Component
 
             return trim($text);
         } catch (\Exception $e) {
-            Log::error('Erreur lors de l\'extraction du texte PDF: ' . $e->getMessage());
-            throw new \Exception('Impossible d\'extraire le texte du PDF: ' . $e->getMessage());
+            Log::error('Erreur lors de l\'extraction du texte PDF: '.$e->getMessage());
+            throw new \Exception('Impossible d\'extraire le texte du PDF: '.$e->getMessage());
         }
     }
 
     /**
      * Extrait le texte d'un fichier DOCX/DOC
-     * 
-     * @param string $filePath Chemin complet vers le fichier DOCX/DOC
+     *
+     * @param  string  $filePath  Chemin complet vers le fichier DOCX/DOC
      * @return string Le texte extrait du DOCX/DOC
      */
     protected function extractTextFromDocx(string $filePath): string
     {
         // Vérifier si la bibliothèque est installée
-        if (!class_exists('\PhpOffice\PhpWord\IOFactory')) {
+        if (! class_exists('\PhpOffice\PhpWord\IOFactory')) {
             throw new \Exception('La bibliothèque phpoffice/phpword n\'est pas installée. Exécutez: composer require phpoffice/phpword');
         }
 
@@ -381,19 +381,19 @@ class DocumentUploader extends Component
                     if (method_exists($element, 'getElements')) {
                         foreach ($element->getElements() as $childElement) {
                             if (method_exists($childElement, 'getText')) {
-                                $text .= $childElement->getText() . ' ';
+                                $text .= $childElement->getText().' ';
                             }
                         }
                     } elseif (method_exists($element, 'getText')) {
-                        $text .= $element->getText() . ' ';
+                        $text .= $element->getText().' ';
                     }
                 }
             }
 
             return trim($text);
         } catch (\Exception $e) {
-            Log::error('Erreur lors de l\'extraction du texte DOCX: ' . $e->getMessage());
-            throw new \Exception('Impossible d\'extraire le texte du DOCX: ' . $e->getMessage());
+            Log::error('Erreur lors de l\'extraction du texte DOCX: '.$e->getMessage());
+            throw new \Exception('Impossible d\'extraire le texte du DOCX: '.$e->getMessage());
         }
     }
 

@@ -163,15 +163,15 @@ class ChatForm extends Component
     public function updateSelectedCollection(?string $collectionName)
     {
         $this->selectedCollection = $collectionName;
-        
+
         // Stocker la collection sélectionnée dans la session
         session(['selected_collection' => $collectionName]);
-        
+
         Log::info('Collection sélectionnée mise à jour dans ChatForm', [
             'collection' => $collectionName,
             'session_value' => session('selected_collection'),
         ]);
-        
+
         // Définir explicitement la collection dans le RagService
         if ($collectionName) {
             $this->ragService->setQdrantCollection($collectionName);
@@ -396,13 +396,13 @@ class ChatForm extends Component
                 ]);
 
                 // Déterminer le mode RAG à utiliser (collection ou conversation)
-                if (!empty($this->selectedCollection)) {
+                if (! empty($this->selectedCollection)) {
                     // Mode RAG par collection
                     Log::info('Utilisation du RAG par collection', [
                         'collection' => $this->selectedCollection,
                         'query' => $userMessage,
                     ]);
-                    
+
                     // Log juste avant l'appel à searchSimilarDocuments
                     Log::info('Paramètres de recherche RAG par collection', [
                         'collection' => $this->selectedCollection,
@@ -410,24 +410,24 @@ class ChatForm extends Component
                         'limit' => 4,
                         'document_ids' => null,
                     ]);
-                    
+
                     // Rechercher dans la collection spécifiée
                     $contextDocuments = $this->ragService->searchSimilarDocuments(
-                        $userMessage, 
-                        4, 
-                        null, 
+                        $userMessage,
+                        4,
+                        null,
                         $this->selectedCollection
                     );
-                    
-                    if (!empty($contextDocuments)) {
+
+                    if (! empty($contextDocuments)) {
                         Log::info('Documents trouvés dans la collection', [
                             'collection' => $this->selectedCollection,
                             'document_count' => count($contextDocuments),
                         ]);
-                        
-                        $ragInfoMessage = ' avec contexte RAG (collection: ' . $this->selectedCollection . ', ' . count($contextDocuments) . ' documents)';
+
+                        $ragInfoMessage = ' avec contexte RAG (collection: '.$this->selectedCollection.', '.count($contextDocuments).' documents)';
                     }
-                } else if ($conversation) {
+                } elseif ($conversation) {
                     // Mode RAG par conversation (existant)
                     $documentIds = [];
                     if ($conversation) {
@@ -440,10 +440,10 @@ class ChatForm extends Component
                     }
 
                     // Rechercher les documents pertinents uniquement si des documents sont liés à la conversation
-                    if (!empty($documentIds)) {
+                    if (! empty($documentIds)) {
                         $contextDocuments = $this->ragService->searchSimilarDocuments($userMessage, 4, $documentIds);
 
-                        if (!empty($contextDocuments)) {
+                        if (! empty($contextDocuments)) {
                             Log::info('Documents pertinents trouvés', [
                                 'document_count' => count($contextDocuments),
                                 'query' => $userMessage,
@@ -464,9 +464,9 @@ class ChatForm extends Component
                         Log::info('Aucun document lié à la conversation, recherche RAG ignorée', [
                             'conversation_id' => $conversation->id,
                         ]);
-                        
+
                         // Prompt spécifique pour informer l'utilisateur qu'aucun document n'est lié
-                        $systemPrompt = "<<<SYSTEM
+                        $systemPrompt = '<<<SYSTEM
                             📌 Aucun document n’est actuellement associé à cette conversation alors que le mode RAG est activé.
 
                             ℹ️ Tant qu’aucun document n’est disponible et que RAG reste actif, **ne génère pas de réponse de fond basée sur tes connaissances internes**. Contente-toi d’informer l’utilisateur de la situation et de lui proposer les options ci-dessous.
@@ -476,21 +476,21 @@ class ChatForm extends Component
                             2. **Sélectionner une collection documentaire** existante dans les paramètres, tout en gardant le mode RAG activé.
                             3. **Désactiver temporairement le mode RAG** afin d’obtenir une réponse fondée uniquement sur les connaissances générales du modèle.
 
-                            SYSTEM";
+                            SYSTEM';
                     }
                 }
             }
 
             // Préparer le prompt enrichi avec le contexte RAG si disponible
-            if (!isset($systemPrompt)) {
+            if (! isset($systemPrompt)) {
                 $systemPrompt = '';
-                if (!empty($contextDocuments)) {
+                if (! empty($contextDocuments)) {
                     $systemPrompt = "Voici des extraits de documents pertinents pour répondre à la question:\n\n";
-    
+
                     foreach ($contextDocuments as $index => $doc) {
                         $systemPrompt .= 'Contexte '.($index + 1).":\n".$doc['text']."\n\n";
                     }
-    
+
                     $systemPrompt .= "Utilise ces informations pour enrichir ta réponse à la question de l'utilisateur.";
                 } else {
                     $systemPrompt = "Aucun document pertinent n'a été trouvé dans la base de connaissances pour cette question. Commence ta réponse en indiquant brièvement que tu réponds selon tes connaissances générales car aucune information spécifique n'a été trouvée dans les documents fournis par l'utilisateur. Puis réponds au mieux à la question posée.";

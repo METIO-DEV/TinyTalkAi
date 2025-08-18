@@ -31,7 +31,7 @@ class QdrantCollectionsService
         $this->qdrantHost = config('services.qdrant.host', 'host.docker.internal');
         $this->qdrantPort = config('services.qdrant.port', '6333');
         $this->qdrantCollection = config('services.qdrant.collection', 'docs');
-        
+
         // Modèle d'embedding par défaut
         $this->embeddingModel = config('services.ollama.embedding_model', 'nomic-embed-text');
     }
@@ -39,8 +39,7 @@ class QdrantCollectionsService
     /**
      * Définit le modèle d'embedding à utiliser
      *
-     * @param string $modelName Nom du modèle d'embedding
-     * @return void
+     * @param  string  $modelName  Nom du modèle d'embedding
      */
     public function setEmbeddingModel(string $modelName): void
     {
@@ -51,8 +50,7 @@ class QdrantCollectionsService
     /**
      * Définit le nom de la collection Qdrant à utiliser
      *
-     * @param string $collectionName Nom de la collection
-     * @return void
+     * @param  string  $collectionName  Nom de la collection
      */
     public function setQdrantCollection(string $collectionName): void
     {
@@ -95,10 +93,10 @@ class QdrantCollectionsService
 
                 // Extraire uniquement les noms des collections et exclure la collection "docs"
                 $collectionNames = array_column($collections, 'name');
-                
+
                 // Filtrer les noms vides et la collection "docs"
-                return array_filter($collectionNames, function($name) {
-                    return !empty($name) && $name !== 'docs';
+                return array_filter($collectionNames, function ($name) {
+                    return ! empty($name) && $name !== 'docs';
                 });
             } else {
                 Log::error('Erreur lors du listage des collections', [
@@ -121,7 +119,7 @@ class QdrantCollectionsService
     /**
      * Crée une nouvelle collection dans Qdrant
      *
-     * @param string $collectionName Nom de la collection à créer
+     * @param  string  $collectionName  Nom de la collection à créer
      * @return bool True si la création a réussi, false sinon
      */
     public function createCollection(string $collectionName): bool
@@ -176,7 +174,7 @@ class QdrantCollectionsService
     /**
      * Supprime une collection dans Qdrant
      *
-     * @param string $collectionName Nom de la collection à supprimer
+     * @param  string  $collectionName  Nom de la collection à supprimer
      * @return bool True si la suppression a réussi, false sinon
      */
     public function deleteCollection(string $collectionName): bool
@@ -224,7 +222,7 @@ class QdrantCollectionsService
     /**
      * Vérifie si une collection existe dans Qdrant
      *
-     * @param string $collectionName Nom de la collection à vérifier
+     * @param  string  $collectionName  Nom de la collection à vérifier
      * @return bool True si la collection existe, false sinon
      */
     public function collectionExists(string $collectionName): bool
@@ -253,7 +251,7 @@ class QdrantCollectionsService
     /**
      * Récupère les informations sur une collection dans Qdrant
      *
-     * @param string $collectionName Nom de la collection
+     * @param  string  $collectionName  Nom de la collection
      * @return array Informations sur la collection
      */
     public function getCollectionInfo(string $collectionName): array
@@ -304,7 +302,7 @@ class QdrantCollectionsService
     {
         // Dimension par défaut pour nomic-embed-text
         $dimension = 768;
-        
+
         // Ajuster la dimension en fonction du modèle d'embedding
         if (Str::contains($this->embeddingModel, 'bge-m3')) {
             $dimension = 1024; // Dimension pour bge-m3

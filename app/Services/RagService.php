@@ -307,7 +307,7 @@ class RagService
             if ($collection !== null) {
                 $originalCollection = $this->qdrantCollection;
                 $this->qdrantCollection = $collection;
-                
+
                 Log::info('Utilisation temporaire de la collection pour la recherche', [
                     'collection' => $collection,
                     'query' => $query,
@@ -375,7 +375,7 @@ class RagService
 
             Log::info('Requête Qdrant', [
                 'url' => $qdrantUrl,
-                'request_data' => $requestData, 
+                'request_data' => $requestData,
             ]);
 
             $response = Http::post($qdrantUrl, $requestData);

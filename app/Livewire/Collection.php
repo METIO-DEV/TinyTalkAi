@@ -141,11 +141,11 @@ class Collection extends Component
             $this->collections = $this->collectionsService->listCollections();
             $this->isProcessing = false;
         } catch (\Exception $e) {
-            Log::error('Collection: erreur lors du chargement des collections: ' . $e->getMessage(), [
+            Log::error('Collection: erreur lors du chargement des collections: '.$e->getMessage(), [
                 'exception' => get_class($e),
                 'trace' => $e->getTraceAsString(),
             ]);
-            $this->statusMessage = 'Erreur lors du chargement des collections: ' . $e->getMessage();
+            $this->statusMessage = 'Erreur lors du chargement des collections: '.$e->getMessage();
             $this->isProcessing = false;
         }
     }
@@ -200,12 +200,12 @@ class Collection extends Component
                 Log::info('Collection: collection créée avec succès', [
                     'collectionName' => $this->collectionName,
                 ]);
-                
+
                 $this->statusMessage = 'Collection créée avec succès !';
                 $this->success = true;
                 $this->loadCollections();
                 $this->selectedCollection = $this->collectionName;
-                
+
                 // Fermer le modal après un court délai
                 $this->dispatch('closeModalAfterDelay');
             } else {
@@ -213,11 +213,11 @@ class Collection extends Component
                 $this->statusMessage = 'Erreur lors de la création de la collection.';
             }
         } catch (\Exception $e) {
-            Log::error('Collection: erreur lors de la création de la collection: ' . $e->getMessage(), [
+            Log::error('Collection: erreur lors de la création de la collection: '.$e->getMessage(), [
                 'exception' => get_class($e),
                 'trace' => $e->getTraceAsString(),
             ]);
-            $this->statusMessage = 'Une erreur est survenue: ' . $e->getMessage();
+            $this->statusMessage = 'Une erreur est survenue: '.$e->getMessage();
         } finally {
             $this->isProcessing = false;
         }
@@ -234,7 +234,7 @@ class Collection extends Component
         }
     }
 
-     /**
+    /**
      * Sélectionne ou désélectionne une collection
      */
     public function selectCollection(string $collectionName)
@@ -243,6 +243,7 @@ class Collection extends Component
             // Désélection : on ne touche PAS au toggle RAG
             $this->selectedCollection = null;
             $this->dispatch('collectionSelected', null);
+
             return;
         }
 
@@ -263,31 +264,31 @@ class Collection extends Component
         try {
             $this->isProcessing = true;
             $result = $this->collectionsService->deleteCollection($collectionName);
-            
+
             if ($result) {
                 Log::info('Collection: collection supprimée avec succès', [
                     'collectionName' => $collectionName,
                 ]);
-                
+
                 $this->statusMessage = 'Collection supprimée avec succès !';
                 $this->success = true;
-                
+
                 // Si la collection supprimée était sélectionnée, réinitialiser la sélection
                 if ($this->selectedCollection === $collectionName) {
                     $this->selectedCollection = null;
                 }
-                
+
                 $this->loadCollections();
             } else {
                 Log::error('Collection: échec de la suppression de la collection');
                 $this->statusMessage = 'Erreur lors de la suppression de la collection.';
             }
         } catch (\Exception $e) {
-            Log::error('Collection: erreur lors de la suppression de la collection: ' . $e->getMessage(), [
+            Log::error('Collection: erreur lors de la suppression de la collection: '.$e->getMessage(), [
                 'exception' => get_class($e),
                 'trace' => $e->getTraceAsString(),
             ]);
-            $this->statusMessage = 'Une erreur est survenue: ' . $e->getMessage();
+            $this->statusMessage = 'Une erreur est survenue: '.$e->getMessage();
         } finally {
             $this->isProcessing = false;
         }
@@ -407,7 +408,7 @@ class Collection extends Component
 
             // S'assurer que la collection est sélectionnée dans les deux services
             $this->collectionsService->setQdrantCollection($this->selectedCollection);
-            
+
             // Définir le modèle d'embedding à utiliser
             $this->ragService->setEmbeddingModel($this->embeddingModel);
 
@@ -434,11 +435,11 @@ class Collection extends Component
                 $this->statusMessage = 'Erreur lors du traitement du document.';
             }
         } catch (\Exception $e) {
-            Log::error('Collection: erreur lors du traitement du document: ' . $e->getMessage(), [
+            Log::error('Collection: erreur lors du traitement du document: '.$e->getMessage(), [
                 'exception' => get_class($e),
                 'trace' => $e->getTraceAsString(),
             ]);
-            $this->statusMessage = 'Une erreur est survenue: ' . $e->getMessage();
+            $this->statusMessage = 'Une erreur est survenue: '.$e->getMessage();
         } finally {
             $this->isProcessing = false;
         }
@@ -446,19 +447,19 @@ class Collection extends Component
 
     /**
      * Extrait le texte d'un fichier PDF
-     * 
-     * @param string $filePath Chemin complet vers le fichier PDF
+     *
+     * @param  string  $filePath  Chemin complet vers le fichier PDF
      * @return string Le texte extrait du PDF
      */
     protected function extractTextFromPdf(string $filePath): string
     {
         // Vérifier si la bibliothèque est installée
-        if (!class_exists('\Smalot\PdfParser\Parser')) {
+        if (! class_exists('\Smalot\PdfParser\Parser')) {
             throw new \Exception('La bibliothèque smalot/pdfparser n\'est pas installée. Exécutez: composer require smalot/pdfparser');
         }
 
         // Créer le parser
-        $parser = new \Smalot\PdfParser\Parser();
+        $parser = new \Smalot\PdfParser\Parser;
 
         try {
             // Analyser le PDF
@@ -469,21 +470,21 @@ class Collection extends Component
 
             return trim($text);
         } catch (\Exception $e) {
-            Log::error('Erreur lors de l\'extraction du texte PDF: ' . $e->getMessage());
-            throw new \Exception('Impossible d\'extraire le texte du PDF: ' . $e->getMessage());
+            Log::error('Erreur lors de l\'extraction du texte PDF: '.$e->getMessage());
+            throw new \Exception('Impossible d\'extraire le texte du PDF: '.$e->getMessage());
         }
     }
 
     /**
      * Extrait le texte d'un fichier DOCX/DOC
-     * 
-     * @param string $filePath Chemin complet vers le fichier DOCX/DOC
+     *
+     * @param  string  $filePath  Chemin complet vers le fichier DOCX/DOC
      * @return string Le texte extrait du DOCX/DOC
      */
     protected function extractTextFromDocx(string $filePath): string
     {
         // Vérifier si la bibliothèque est installée
-        if (!class_exists('\PhpOffice\PhpWord\IOFactory')) {
+        if (! class_exists('\PhpOffice\PhpWord\IOFactory')) {
             throw new \Exception('La bibliothèque phpoffice/phpword n\'est pas installée. Exécutez: composer require phpoffice/phpword');
         }
 
@@ -498,19 +499,19 @@ class Collection extends Component
                     if (method_exists($element, 'getElements')) {
                         foreach ($element->getElements() as $childElement) {
                             if (method_exists($childElement, 'getText')) {
-                                $text .= $childElement->getText() . ' ';
+                                $text .= $childElement->getText().' ';
                             }
                         }
                     } elseif (method_exists($element, 'getText')) {
-                        $text .= $element->getText() . ' ';
+                        $text .= $element->getText().' ';
                     }
                 }
             }
 
             return trim($text);
         } catch (\Exception $e) {
-            Log::error('Erreur lors de l\'extraction du texte DOCX: ' . $e->getMessage());
-            throw new \Exception('Impossible d\'extraire le texte du DOCX: ' . $e->getMessage());
+            Log::error('Erreur lors de l\'extraction du texte DOCX: '.$e->getMessage());
+            throw new \Exception('Impossible d\'extraire le texte du DOCX: '.$e->getMessage());
         }
     }
 

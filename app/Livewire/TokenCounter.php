@@ -278,10 +278,9 @@ class TokenCounter extends Component
             Log::info('Tentative de résumé ignorée car un résumé est déjà en cours', [
                 'conversation_id' => $this->conversationId,
             ]);
-            
+
             return;
         }
-
 
         // Vérifier si une conversation est sélectionnée
         if (! $this->conversationId) {

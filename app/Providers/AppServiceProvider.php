@@ -14,7 +14,7 @@ class AppServiceProvider extends ServiceProvider
     {
         // Enregistrement du service QdrantCollectionsService comme singleton
         $this->app->singleton(QdrantCollectionsService::class, function ($app) {
-            return new QdrantCollectionsService();
+            return new QdrantCollectionsService;
         });
     }
 
