@@ -104,7 +104,14 @@ class AdminPanelProvider extends PanelProvider
                         /* Style du header de la sidebar */
                         .fi-sidebar-header {
                             border-bottom: 1px solid #333333;
-                            padding-bottom: 1rem;
+                            justify-content: start;
+                            display: flex;
+                            text-align: start;
+                        }
+
+                        .fi-logo{
+                            display: flex;
+                            align-items: center;
                         }
                         
                         /* Responsive fixes */

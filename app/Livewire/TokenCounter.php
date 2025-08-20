@@ -7,6 +7,7 @@ use App\Models\Message;
 use App\Services\ConversationMemoryService;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Log;
+use Livewire\Attributes\On;
 use Livewire\Component;
 
 class TokenCounter extends Component
@@ -49,15 +50,15 @@ class TokenCounter extends Component
     /**
      * Écoute les événements de mise à jour du modèle et des tokens
      */
-    protected $listeners = [
-        'modelSelected' => 'updateSelectedModel',
-        'tokensUpdated' => 'updateTokensUsed',
-        'conversationSelected' => 'loadConversation',
-        'conversationCleared' => 'clearConversation',
-        'loadingComplete' => '$refresh',
-        'messageLoadingStarted' => 'onMessageLoadingStarted',
-        'messageLoadingEnded' => 'onMessageLoadingEnded',
-    ];
+    // protected $listeners = [
+    //     'modelSelected' => 'updateSelectedModel',
+    //     'tokensUpdated' => 'updateTokensUsed',
+    //     'conversationSelected' => 'loadConversation',
+    //     'conversationCleared' => 'clearConversation',
+    //     'loadingComplete' => '$refresh',
+    //     'messageLoadingStarted' => 'onMessageLoadingStarted',
+    //     'messageLoadingEnded' => 'onMessageLoadingEnded',
+    // ];
 
     /**
      * Initialisation du composant
@@ -90,6 +91,7 @@ class TokenCounter extends Component
     /**
      * Met à jour le modèle sélectionné et sa limite de tokens
      */
+    #[On('modelSelected')]
     public function updateSelectedModel(string $modelName)
     {
         $this->selectedModel = $modelName;
@@ -181,6 +183,7 @@ class TokenCounter extends Component
     /**
      * Charge une conversation et met à jour le compteur de tokens
      */
+    #[On('conversationSelected')]
     public function loadConversation(string $conversationId)
     {
         // Vérifier si la conversation existe avant de la charger
@@ -202,6 +205,7 @@ class TokenCounter extends Component
     /**
      * Efface la conversation actuelle
      */
+    #[On('conversationCleared')]
     public function clearConversation()
     {
         // Seulement effacer si nous avons été explicitement informés de le faire
@@ -234,6 +238,7 @@ class TokenCounter extends Component
     /**
      * Met à jour le nombre de tokens utilisés
      */
+    #[On('tokensUpdated')]
     public function updateTokensUsed(int $tokensUsed)
     {
         // Si nous n'avons pas de conversation active, ignorer la mise à jour
@@ -255,6 +260,7 @@ class TokenCounter extends Component
     /**
      * Appelé quand un envoi de message commence
      */
+    #[On('messageLoadingStarted')]
     public function onMessageLoadingStarted()
     {
         $this->isMessageSending = true;
@@ -263,6 +269,7 @@ class TokenCounter extends Component
     /**
      * Appelé quand un envoi de message se termine
      */
+    #[On('messageLoadingEnded')]
     public function onMessageLoadingEnded()
     {
         $this->isMessageSending = false;
@@ -319,7 +326,7 @@ class TokenCounter extends Component
         // Activer l'indicateur de chargement
         $this->isSummarizing = true;
         // Informer les autres composants que le résumé commence
-        $this->dispatch('summarizingStarted');
+        $this->dispatch('summarizingStarted')->to(\App\Livewire\ChatForm::class);
 
         Log::info('Début de la génération du résumé', [
             'conversation_id' => $this->conversationId,
@@ -366,7 +373,7 @@ class TokenCounter extends Component
             // Désactiver l'indicateur de chargement, peu importe le résultat
             $this->isSummarizing = false;
             // Informer les autres composants que le résumé est terminé
-            $this->dispatch('summarizingEnded');
+            $this->dispatch('summarizingEnded')->to(\App\Livewire\ChatForm::class);
 
             Log::info('Fin de la génération du résumé', [
                 'conversation_id' => $this->conversationId,

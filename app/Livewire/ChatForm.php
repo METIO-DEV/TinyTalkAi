@@ -9,6 +9,7 @@ use App\Services\RagService;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Log;
+use Livewire\Attributes\On;
 use Livewire\Component;
 
 class ChatForm extends Component
@@ -51,7 +52,7 @@ class ChatForm extends Component
     /**
      * Indique si le mode RAG est activé
      */
-    public bool $ragEnabled = true;
+    public bool $ragEnabled = false;
 
     /**
      * Liste des modèles disponibles
@@ -66,18 +67,18 @@ class ChatForm extends Component
     /**
      * Écouteurs d'événements Livewire
      */
-    protected $listeners = [
-        'modelSelected' => 'updateSelectedModel',
-        'conversationSelected' => 'loadConversation',
-        'conversationCleared' => 'clearConversation',
-        'summarizingStarted' => 'onSummarizingStarted',
-        'summarizingEnded' => 'onSummarizingEnded',
-        'ragToggled' => 'toggleRag',
-        'documentAdded' => 'handleDocumentAdded',
-        'getAvailableModels' => 'sendAvailableModels',
-        'collectionSelected' => 'updateSelectedCollection',
-        'messageLoadingStarted' => '$refresh',
-    ];
+    // protected $listeners = [
+    //     'modelSelected' => 'updateSelectedModel',
+    //     'conversationSelected' => 'loadConversation',
+    //     'conversationCleared' => 'clearConversation',
+    //     'summarizingStarted' => 'onSummarizingStarted',
+    //     'summarizingEnded' => 'onSummarizingEnded',
+    //     'ragToggled' => 'toggleRag',
+    //     'documentAdded' => 'handleDocumentAdded',
+    //     'getAvailableModels' => 'sendAvailableModels',
+    //     'collectionSelected' => 'updateSelectedCollection',
+    //     'messageLoadingStarted' => '$refresh',
+    // ];
 
     /**
      * Constructeur du composant
@@ -94,8 +95,12 @@ class ChatForm extends Component
     public function mount()
     {
         $this->selectedModel = session('selected_model', '');
-        $this->ragEnabled = session('rag_enabled', true);
+        $this->ragEnabled = session('rag_enabled', false);
         $this->selectedCollection = session('selected_collection', null);
+
+        // Notifier les autres composants de l'état initial
+        $this->dispatch('ragToggled', $this->ragEnabled);
+        $this->dispatch('collectionSelected', $this->selectedCollection);
 
         // Charger la conversation si une ID est présente dans la session
         $conversationId = session('selected_conversation_id');
@@ -107,15 +112,24 @@ class ChatForm extends Component
     /**
      * Active ou désactive le mode RAG
      */
+    #[On('ragToggled')]
     public function toggleRag(bool $enabled)
     {
         $this->ragEnabled = $enabled;
         session(['rag_enabled' => $enabled]);
+
+        // Si RAG est désactivé, réinitialiser la collection sélectionnée
+        if (! $enabled) {
+            $this->selectedCollection = null;
+            session(['selected_collection' => null]);
+            Log::info('Collection réinitialisée car RAG désactivé');
+        }
     }
 
     /**
      * Appelé lorsqu'un document est ajouté
      */
+    #[On('documentAdded')]
     public function handleDocumentAdded($documentId)
     {
         // Activer automatiquement le mode RAG après l'ajout d'un document
@@ -142,6 +156,7 @@ class ChatForm extends Component
     /**
      * Met à jour le modèle sélectionné
      */
+    #[On('modelSelected')]
     public function updateSelectedModel(string $modelName)
     {
         $this->selectedModel = $modelName;
@@ -160,6 +175,7 @@ class ChatForm extends Component
     /**
      * Met à jour la collection Qdrant sélectionnée
      */
+    #[On('collectionSelected')]
     public function updateSelectedCollection(?string $collectionName)
     {
         $this->selectedCollection = $collectionName;
@@ -184,6 +200,7 @@ class ChatForm extends Component
     /**
      * Charge une conversation
      */
+    #[On('conversationSelected')]
     public function loadConversation(string $conversationId)
     {
         $this->conversationId = $conversationId;
@@ -238,6 +255,7 @@ class ChatForm extends Component
     /**
      * Appelé quand un résumé commence
      */
+    #[On('summarizingStarted')]
     public function onSummarizingStarted()
     {
         $this->isSummarizing = true;
@@ -246,6 +264,7 @@ class ChatForm extends Component
     /**
      * Appelé quand un résumé se termine
      */
+    #[On('summarizingEnded')]
     public function onSummarizingEnded()
     {
         $this->isSummarizing = false;
@@ -281,7 +300,7 @@ class ChatForm extends Component
         // Activer l'indicateur de chargement
         $this->isLoading = true;
         // Informer les autres composants que l'envoi commence
-        $this->dispatch('messageLoadingStarted');
+        $this->dispatch('messageLoadingStarted')->to(\App\Livewire\TokenCounter::class);
 
         try {
             // Stocker le message avant de le vider
@@ -581,7 +600,7 @@ class ChatForm extends Component
             $this->isLoading = false;
 
             // Informer les autres composants que l'envoi est terminé
-            $this->dispatch('messageLoadingEnded');
+            $this->dispatch('messageLoadingEnded')->to(TokenCounter::class);
 
         }
     }
@@ -589,6 +608,7 @@ class ChatForm extends Component
     /**
      * Efface la conversation actuelle
      */
+    #[On('conversationCleared')]
     public function clearConversation()
     {
         $this->conversationId = null;

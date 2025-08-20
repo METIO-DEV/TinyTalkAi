@@ -15,4 +15,12 @@ class Group extends Model
     {
         return $this->belongsToMany(User::class);
     }
+
+    /**
+     * Les collections associées à ce groupe
+     */
+    public function collections()
+    {
+        return $this->belongsToMany(Collection::class);
+    }
 }

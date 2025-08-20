@@ -2,6 +2,7 @@
 
 namespace App\Services;
 
+use App\Models\Collection;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Str;
@@ -321,5 +322,76 @@ class QdrantCollectionsService
         }
 
         return $dimension;
+    }
+
+    /**
+     * Synchronise les collections de Qdrant vers la base de données
+     *
+     * @return array Résultat de la synchronisation [success, message, count]
+     */
+    public function syncCollectionsToDatabase(): array
+    {
+        try {
+            Log::info('Début de la synchronisation des collections Qdrant vers la base de données');
+
+            // Récupérer les collections depuis Qdrant
+            $qdrantCollections = $this->listCollections();
+
+            if (empty($qdrantCollections)) {
+                Log::info('Aucune collection trouvée dans Qdrant');
+
+                return [
+                    'success' => true,
+                    'message' => 'Aucune collection trouvée dans Qdrant',
+                    'count' => 0,
+                ];
+            }
+
+            $count = 0;
+
+            // Pour chaque collection dans Qdrant
+            foreach ($qdrantCollections as $collectionName) {
+                // Vérifier si la collection existe déjà en base de données
+                $existingCollection = Collection::where('name', $collectionName)->first();
+
+                if (! $existingCollection) {
+                    // Récupérer les informations de la collection depuis Qdrant
+                    $collectionInfo = $this->getCollectionInfo($collectionName);
+
+                    // Créer la collection en base de données
+                    Collection::create([
+                        'name' => $collectionName,
+                        'description' => 'Collection importée depuis Qdrant',
+                        'is_active' => true,
+                        'metadata' => ! empty($collectionInfo) ? json_encode($collectionInfo) : null,
+                    ]);
+
+                    $count++;
+                    Log::info("Collection '{$collectionName}' importée avec succès");
+                } else {
+                    Log::info("Collection '{$collectionName}' déjà existante en base de données");
+                }
+            }
+
+            Log::info("Synchronisation terminée. {$count} collections importées");
+
+            return [
+                'success' => true,
+                'message' => "{$count} collections importées avec succès",
+                'count' => $count,
+            ];
+
+        } catch (\Exception $e) {
+            Log::error('Erreur lors de la synchronisation des collections: '.$e->getMessage(), [
+                'exception' => get_class($e),
+                'trace' => $e->getTraceAsString(),
+            ]);
+
+            return [
+                'success' => false,
+                'message' => 'Erreur lors de la synchronisation: '.$e->getMessage(),
+                'count' => 0,
+            ];
+        }
     }
 }

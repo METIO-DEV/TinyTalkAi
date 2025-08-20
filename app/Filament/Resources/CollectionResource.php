@@ -2,23 +2,21 @@
 
 namespace App\Filament\Resources;
 
-use App\Filament\Resources\GroupResource\Pages;
-use App\Models\Group;
+use App\Filament\Resources\CollectionResource\Pages;
+use App\Models\Collection;
 use Filament\Forms;
 use Filament\Forms\Form;
 use Filament\Resources\Resource;
 use Filament\Tables;
 use Filament\Tables\Table;
 
-class GroupResource extends Resource
+class CollectionResource extends Resource
 {
-    protected static ?string $model = Group::class;
+    protected static ?string $model = Collection::class;
 
-    protected static ?string $navigationIcon = 'heroicon-o-rectangle-stack';
+    protected static ?string $navigationIcon = 'heroicon-o-document-text';
 
-    protected static ?string $navigationLabel = 'Groupes';
-
-    protected static ?int $navigationSort = 3;
+    protected static ?int $navigationSort = 4;
 
     public static function form(Form $form): Form
     {
@@ -26,14 +24,18 @@ class GroupResource extends Resource
             ->schema([
                 Forms\Components\TextInput::make('name')
                     ->required()
+                    ->unique(ignoreRecord: true)
                     ->maxLength(255),
                 Forms\Components\Textarea::make('description')
                     ->columnSpanFull(),
-                Forms\Components\Select::make('collections')
+                Forms\Components\Toggle::make('is_active')
+                    ->label('Actif')
+                    ->default(true),
+                Forms\Components\Select::make('groups')
                     ->relationship(
-                        'collections',
+                        'groups',
                         'name',
-                        modifyQueryUsing: fn ($query) => $query->where('collections.is_active', true)->select(['collections.id', 'collections.name'])->orderBy('collections.name')
+                        modifyQueryUsing: fn ($query) => $query->select(['groups.id', 'groups.name'])->orderBy('groups.name')
                     )
                     ->multiple()
                     ->preload()
@@ -47,10 +49,11 @@ class GroupResource extends Resource
             ->columns([
                 Tables\Columns\TextColumn::make('name')
                     ->searchable(),
-                Tables\Columns\TextColumn::make('collections.name')
-                    ->badge()
-                    ->color('primary')
+                Tables\Columns\TextColumn::make('description')
+                    ->limit(50)
                     ->searchable(),
+                Tables\Columns\IconColumn::make('is_active')
+                    ->boolean(),
                 Tables\Columns\TextColumn::make('created_at')
                     ->dateTime()
                     ->sortable()
@@ -61,7 +64,12 @@ class GroupResource extends Resource
                     ->toggleable(isToggledHiddenByDefault: true),
             ])
             ->filters([
-                //
+                Tables\Filters\SelectFilter::make('is_active')
+                    ->options([
+                        '1' => 'Actif',
+                        '0' => 'Inactif',
+                    ])
+                    ->label('Statut'),
             ])
             ->actions([
                 Tables\Actions\EditAction::make(),
@@ -83,9 +91,9 @@ class GroupResource extends Resource
     public static function getPages(): array
     {
         return [
-            'index' => Pages\ListGroups::route('/'),
-            'create' => Pages\CreateGroup::route('/create'),
-            'edit' => Pages\EditGroup::route('/{record}/edit'),
+            'index' => Pages\ListCollections::route('/'),
+            'create' => Pages\CreateCollection::route('/create'),
+            'edit' => Pages\EditCollection::route('/{record}/edit'),
         ];
     }
 }

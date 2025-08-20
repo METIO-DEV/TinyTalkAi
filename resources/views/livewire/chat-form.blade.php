@@ -4,6 +4,7 @@
               x-data="{ 
                   addUserMessage() {
                       if (!$wire.message.trim()) return;
+                      if ($wire.isSummarizing || $wire.isLoading) return;
                       $wire.sendMessage();
                   },
                   autoResize(el) {
@@ -31,6 +32,9 @@
                 placeholder="{{ $selectedModel ? 'Écrivez à '.$selectedModel.'... (Shift+Enter pour un retour à la ligne)' : 'Sélectionnez un modèle...' }}"
                 rows="1"
                 {{ $selectedModel ? '' : 'disabled' }}
+                {{ $isSummarizing ? 'disabled' : '' }}
+                wire:loading.attr="disabled"
+                wire:target="sendMessage"
             ></textarea>        
             <button 
                 type="submit" 
@@ -39,7 +43,7 @@
                 {{ $isSummarizing ? 'disabled' : '' }}
                 wire:loading.attr="disabled"
                 wire:loading.class="opacity-50 cursor-not-allowed"
-                wire:target="sendMessage, $parent"
+                wire:target="sendMessage"
             >
                 <span wire:loading.remove wire:target="sendMessage">
                     <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">

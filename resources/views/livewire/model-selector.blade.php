@@ -10,7 +10,6 @@
         @foreach ($availableModels as $model)
             <option
                 value="{{ $model['name'] }}"
-                @if ($loop->first) selected @endif
             >
                 {{ explode(':', $model['name'])[0] }}
                 — {{ number_format($model['size'] / (1024 * 1024 * 1024), 2) }} GB

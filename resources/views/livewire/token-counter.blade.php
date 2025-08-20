@@ -11,7 +11,7 @@
                 <button 
                     wire:click="summarizeConversation" 
                     wire:loading.attr="disabled"
-                    wire:target="summarizeConversation, $parent"
+                    wire:target="summarizeConversation"
                     wire:loading.class="opacity-50 cursor-not-allowed"
                     {{ $isMessageSending ? 'disabled' : '' }}
                     class="text-xs px-3 py-1 rounded-md transition-colors duration-200 text-custom-black bg-custom-mid hover:border-custom-black hover:dark:border-custom-black border disabled:opacity-50 disabled:cursor-not-allowed whitespace-nowrap min-w-[80px]"

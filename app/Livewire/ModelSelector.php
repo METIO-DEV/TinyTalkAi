@@ -39,11 +39,20 @@ class ModelSelector extends Component
         // Initialiser le service RAG
         $this->ragService = new RagService;
 
+        // Récupérer la liste des modèles disponibles directement via l'API Ollama
+        $this->fetchAvailableModels();
+
         // Récupérer le modèle sélectionné depuis la session
         $this->selectedModel = session('selected_model', '');
 
-        // Récupérer la liste des modèles disponibles directement via l'API Ollama
-        $this->fetchAvailableModels();
+        // Si aucun modèle n'est sélectionné et qu'il y a des modèles disponibles, sélectionner le premier
+        if (empty($this->selectedModel) && ! empty($this->availableModels)) {
+            $this->selectedModel = $this->availableModels[0]['name'];
+            session(['selected_model' => $this->selectedModel]);
+
+            // Émettre un événement pour informer les autres composants
+            $this->dispatch('modelSelected', $this->selectedModel);
+        }
     }
 
     /**
@@ -105,6 +114,9 @@ class ModelSelector extends Component
 
         // Émettre un événement pour informer les autres composants
         $this->dispatch('modelSelected', $modelName);
+
+        // Émettre un événement pour créer une nouvelle conversation
+        $this->dispatch('newConversation');
     }
 
     /**

@@ -2,6 +2,7 @@
 
 namespace App\Livewire;
 
+use App\Models\Collection as CollectionModel;
 use App\Services\QdrantCollectionsService;
 use App\Services\RagService;
 use Illuminate\Support\Facades\Log;
@@ -138,7 +139,70 @@ class Collection extends Component
     {
         try {
             $this->isProcessing = true;
-            $this->collections = $this->collectionsService->listCollections();
+
+            // Collection par défaut
+            $defaultCollection = config('services.qdrant.collection', 'docs');
+
+            // Récupérer l'utilisateur connecté
+            $user = auth()->user();
+
+            // Initialiser le tableau des collections de la base de données
+            $dbCollections = [];
+
+            if ($user) {
+                // Vérifier si l'utilisateur a des groupes
+                $userGroups = $user->groups;
+
+                if ($userGroups && $userGroups->count() > 0) {
+                    // Récupérer les collections accessibles via les groupes de l'utilisateur
+                    $dbCollections = CollectionModel::whereHas('groups', function ($query) use ($userGroups) {
+                        $query->whereIn('groups.id', $userGroups->pluck('id'));
+                    })
+                        ->where('is_active', true)
+                        ->where('name', '!=', config('services.qdrant.collection', 'docs')) // Exclure la collection par défaut
+                        ->pluck('name')
+                        ->toArray();
+
+                    // Log pour debug
+                    Log::info('Collections trouvées pour l\'utilisateur', [
+                        'user_id' => $user->id,
+                        'groups' => $userGroups->pluck('id')->toArray(),
+                        'collections' => $dbCollections,
+                    ]);
+                } else {
+                    Log::info('L\'utilisateur n\'a pas de groupes', ['user_id' => $user->id]);
+                }
+            }
+
+            // Récupérer les collections depuis Qdrant
+            $qdrantCollections = $this->collectionsService->listCollections();
+
+            // Ne garder aucune collection de Qdrant (exclure complètement 'docs')
+            $filteredQdrantCollections = [];
+
+            // S'assurer que la collection par défaut existe dans Qdrant pour les fonctionnalités de recherche
+            if (! in_array($defaultCollection, $qdrantCollections) && ! $this->collectionsService->collectionExists($defaultCollection)) {
+                $this->collectionsService->createCollection($defaultCollection);
+            }
+
+            // N'utiliser que les collections de la base de données (pas de fusion avec 'docs')
+            $this->collections = $dbCollections;
+
+            // Trier les collections par ordre alphabétique
+            sort($this->collections);
+
+            // Si aucune collection n'est disponible ou si la collection sélectionnée n'est pas dans la liste,
+            // réinitialiser selectedCollection
+            if (empty($this->collections) ||
+                ($this->selectedCollection !== null && ! in_array($this->selectedCollection, $this->collections))) {
+                Log::info('Réinitialisation de selectedCollection car collection non disponible', [
+                    'selectedCollection' => $this->selectedCollection,
+                    'availableCollections' => $this->collections,
+                ]);
+                $this->selectedCollection = null;
+                $this->dispatch('collectionSelected', null);
+            }
+
             $this->isProcessing = false;
         } catch (\Exception $e) {
             Log::error('Collection: erreur lors du chargement des collections: '.$e->getMessage(), [
@@ -197,6 +261,14 @@ class Collection extends Component
             $result = $this->collectionsService->createCollection($this->collectionName);
 
             if ($result) {
+                // Création de la collection en base de données
+                CollectionModel::create([
+                    'name' => $this->collectionName,
+                    'description' => 'Collection créée depuis l\'interface utilisateur',
+                    'is_active' => true,
+                    'metadata' => null,
+                ]);
+
                 Log::info('Collection: collection créée avec succès', [
                     'collectionName' => $this->collectionName,
                 ]);
@@ -266,6 +338,9 @@ class Collection extends Component
             $result = $this->collectionsService->deleteCollection($collectionName);
 
             if ($result) {
+                // Supprimer la collection de la base de données
+                CollectionModel::where('name', $collectionName)->delete();
+
                 Log::info('Collection: collection supprimée avec succès', [
                     'collectionName' => $collectionName,
                 ]);
