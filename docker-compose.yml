@@ -26,6 +26,24 @@ services:
             - postgresql
             - redis
             - qdrant
+    queue:
+        image: 'sail-8.4/app'
+        restart: unless-stopped
+        environment:
+            WWWUSER: '${WWWUSER}'
+            LARAVEL_SAIL: 1
+            QUEUE_CONNECTION: '${QUEUE_CONNECTION:-database}'
+        volumes:
+            - '.:/var/www/html'
+        working_dir: /var/www/html
+        command: >-
+            bash -lc "php artisan queue:work --sleep=1 --tries=3 --max-time=3600"
+        depends_on:
+            - mysql
+            - postgresql
+            - redis
+        networks:
+            - sail
     mysql:
         image: 'mysql/mysql-server:8.0'
         ports:

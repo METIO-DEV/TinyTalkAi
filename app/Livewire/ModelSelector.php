@@ -2,8 +2,7 @@
 
 namespace App\Livewire;
 
-use App\Services\RagService;
-use Illuminate\Support\Facades\Http;
+use App\Models\AIModel;
 use Illuminate\Support\Facades\Log;
 use Livewire\Component;
 
@@ -20,11 +19,6 @@ class ModelSelector extends Component
     public array $availableModels = [];
 
     /**
-     * Instance du service RAG
-     */
-    protected RagService $ragService;
-
-    /**
      * Écoute les événements
      */
     protected $listeners = [
@@ -36,10 +30,7 @@ class ModelSelector extends Component
      */
     public function mount()
     {
-        // Initialiser le service RAG
-        $this->ragService = new RagService;
-
-        // Récupérer la liste des modèles disponibles directement via l'API Ollama
+        // Charger les modèles depuis la base de données (gérés en administration)
         $this->fetchAvailableModels();
 
         // Récupérer le modèle sélectionné depuis la session
@@ -56,46 +47,42 @@ class ModelSelector extends Component
     }
 
     /**
-     * Récupère la liste des modèles disponibles via l'API Ollama
+     * Récupère la liste des modèles disponibles via la base de données (Filament admin)
      */
     private function fetchAvailableModels()
     {
         try {
-            // Utiliser RagService pour récupérer uniquement les modèles de génération
-            $models = $this->ragService->getAvailableGenerationModels();
+            $models = AIModel::query()
+                ->where('is_active', true)
+                ->orderBy('name')
+                ->get(['full_name', 'size']);
 
-            // Traitement des modèles pour ajouter les informations nécessaires
-            $this->availableModels = [];
+            $embeddingModel = config('services.ollama.embedding_model', 'nomic-embed-text');
 
-            // Récupération des paramètres de configuration avec valeurs par défaut
-            $ollamaHost = config('services.ollama.host', 'host.docker.internal');
-            $ollamaPort = config('services.ollama.port', '11434');
-            $ollamaUrl = 'http://'.$ollamaHost.':'.$ollamaPort.'/api/tags';
-
-            // Requête HTTP pour obtenir les détails des modèles (taille, etc.)
-            $response = Http::timeout(5)->get($ollamaUrl);
-
-            if ($response->successful()) {
-                $data = $response->json();
-                $modelDetails = $data['models'] ?? [];
-
-                // Créer un tableau associatif pour un accès facile aux détails
-                $modelDetailsMap = [];
-                foreach ($modelDetails as $model) {
-                    $modelDetailsMap[$model['name']] = $model;
+            $this->availableModels = $models->filter(function ($m) use ($embeddingModel) {
+                $full = strtolower($m->full_name ?? '');
+                // Exclure le modèle d'embedding configuré et tout modèle contenant 'embed'
+                if ($full === strtolower($embeddingModel)) {
+                    return false;
                 }
-
-                // Ajouter uniquement les modèles de génération avec leurs détails
-                foreach ($models as $modelName) {
-                    $details = $modelDetailsMap[$modelName] ?? [];
-                    $this->availableModels[] = [
-                        'name' => $modelName,
-                        'size' => $details['size'] ?? 0,
-                    ];
+                if (str_contains($full, 'embed')) {
+                    return false;
                 }
-            }
+                // Exclure aussi la variante potentiellement mal orthographiée fournie par l'utilisateur
+                if (str_contains($full, 'bomic-embed')) {
+                    return false;
+                }
+                return true;
+            })->map(function ($m) {
+                return [
+                    // Le sélecteur attend 'name' comme identifiant complet utilisable par l'API Ollama
+                    'name' => $m->full_name,
+                    'size' => (int) ($m->size ?? 0),
+                ];
+            })->values()->toArray();
         } catch (\Exception $e) {
-            Log::error('Erreur lors de la récupération des modèles: '.$e->getMessage());
+            Log::error('Erreur lors du chargement des modèles depuis la BD: ' . $e->getMessage());
+            $this->availableModels = [];
         }
     }
 

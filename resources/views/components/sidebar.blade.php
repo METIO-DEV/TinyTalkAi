@@ -22,6 +22,11 @@
                             <a href="{{ route('profile') }}" class="flex justify-center items-center px-4 py-2 text-sm text-custom-black dark:text-custom-white rounded-md hover:bg-custom-mid-dark-mode dark:hover:bg-custom-mid-dark-mode">
                                 {{ __('Profile') }}
                             </a>
+                            @role('admin|super-admin')
+                            <a href="{{ url('/admin') }}" class="flex justify-center items-center px-4 py-2 text-sm text-custom-black dark:text-custom-white rounded-md hover:bg-custom-mid-dark-mode dark:hover:bg-custom-mid-dark-mode">
+                                {{ __('Administration') }}
+                            </a>
+                            @endrole
                             <livewire:logout /> <!-- Utilisation du composant "logout" Livewire -->
 
                             <!-- Utilisation de la méthode classique, avec un formulaire et une route qui effectue la déconnexion -->
