@@ -28,8 +28,8 @@
     @empty
         @if(!$selectedModel)
             <div class="text-center text-gray-500 dark:text-gray-400 py-8">
-                <p class="text-lg font-medium">Bienvenue sur TinyTalkAI</p>
-                <p class="mt-2">Sélectionnez un modèle pour commencer une conversation</p>
+                <p class="text-lg font-medium">{{ __('Bienvenue sur TinyTalkAI') }}</p>
+                <p class="mt-2">{{ __('Sélectionnez un modèle pour commencer une conversation') }}</p>
             </div>
         @endif
     @endforelse

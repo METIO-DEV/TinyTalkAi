@@ -1,7 +1,7 @@
 <div class="flex flex-row gap-6 items-center justify-center">
   <div class="flex flex-col">
-      <span class="text-sm font-medium">Mode RAG</span>
-      <span class="text-xs text-gray-500">Enrichit les réponses avec le contexte des documents</span>
+      <span class="text-sm font-medium">{{ __('Mode RAG') }}</span>
+      <span class="text-xs text-gray-500">{{ __('Enrichit les réponses avec le contexte des documents') }}</span>
   </div>
 
   <!-- Toggle switch -->

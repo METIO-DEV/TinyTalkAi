@@ -2,6 +2,8 @@
 
 namespace App\Filament\Resources\CollectionResource\Pages;
 
+use App\Events\CollectionChanged;
+use App\Events\CollectionGroupChanged;
 use App\Filament\Resources\CollectionResource;
 use App\Services\QdrantCollectionsService;
 use Filament\Actions;
@@ -46,6 +48,9 @@ class EditCollection extends EditRecord
                             ->warning()
                             ->send();
                     }
+
+                    // Déclencher l'événement de suppression de collection pour les mises à jour en temps réel
+                    event(new CollectionChanged('deleted', $this->record));
                 }),
         ];
     }
@@ -96,5 +101,22 @@ class EditCollection extends EditRecord
 
         // Pour les autres modifications (description, is_active, etc.)
         // Qdrant ne stocke pas ces informations, donc aucune action n'est nécessaire
+
+        // Déclencher l'événement de mise à jour de collection pour les mises à jour en temps réel
+        event(new CollectionChanged('updated', $this->record));
+    }
+
+    // Intercepter les changements de relations many-to-many pour les groupes
+    protected function afterSyncRelations(): void
+    {
+        parent::afterSyncRelations();
+
+        // Vérifier si la relation avec les groupes a été modifiée
+        if ($this->record->wasRelationshipSynced('groups')) {
+            $groupIds = $this->record->groups->pluck('id')->toArray();
+
+            // Déclencher l'événement de changement de relation collection-groupe
+            event(new CollectionGroupChanged('updated', $this->record->id, $groupIds));
+        }
     }
 }

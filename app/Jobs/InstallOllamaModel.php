@@ -24,8 +24,7 @@ class InstallOllamaModel implements ShouldQueue
         public string $fullName,
         public int $userId,
         public ?int $installationId = null,
-    ) {
-    }
+    ) {}
 
     public function handle(ModelSyncService $sync): void
     {
@@ -74,8 +73,9 @@ class InstallOllamaModel implements ShouldQueue
                 ]);
 
             if (! $response->successful()) {
-                $this->markFailed($installation, 'Échec HTTP lors du pull: ' . $response->status());
-                $this->notifyFailure($user, 'Échec HTTP lors du pull: ' . $response->status());
+                $this->markFailed($installation, 'Échec HTTP lors du pull: '.$response->status());
+                $this->notifyFailure($user, 'Échec HTTP lors du pull: '.$response->status());
+
                 return;
             }
 
@@ -86,6 +86,7 @@ class InstallOllamaModel implements ShouldQueue
                 $chunk = $body->read(8192);
                 if ($chunk === '') {
                     usleep(100000);
+
                     continue;
                 }
                 $buffer .= $chunk;
@@ -106,8 +107,8 @@ class InstallOllamaModel implements ShouldQueue
 
                         // Calculer une progression si possible (précise si completed/total, sinon estimation par phase)
                         $percent = $lastPercent;
-                        if (isset($data['completed'], $data['total']) && (int)$data['total'] > 0) {
-                            $percent = (int) floor(((int)$data['completed'] / (int)$data['total']) * 100);
+                        if (isset($data['completed'], $data['total']) && (int) $data['total'] > 0) {
+                            $percent = (int) floor(((int) $data['completed'] / (int) $data['total']) * 100);
                         } else {
                             $st = strtolower($statusText);
                             if (str_contains($st, 'pulling manifest')) {
@@ -184,7 +185,7 @@ class InstallOllamaModel implements ShouldQueue
         if ($user) {
             Notification::make()
                 ->title('Échec d\'installation du modèle')
-                ->body($this->fullName . ' — ' . $reason)
+                ->body($this->fullName.' — '.$reason)
                 ->danger()
                 ->sendToDatabase($user);
         }

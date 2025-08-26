@@ -32,8 +32,8 @@ echo "🔑 Configuration des permissions..."
 $ARTISAN db:seed --class=PermissionSeeder
 
 echo "✨ Configuration terminée ! Vous pouvez accéder à l'administration via /admin"
-echo "⚠️ N'oubliez pas d'attribuer le rôle 'admin' ou 'super-admin' à votre utilisateur :"
+echo "⚠️ N'oubliez pas d'attribuer le rôle 'admin' à votre utilisateur :"
 echo "$ARTISAN tinker"
 echo ">>> \$user = \App\Models\User::where('email', 'votre-email@exemple.com')->first();"
-echo ">>> \$user->assignRole('super-admin');"
+echo ">>> \$user->assignRole('admin');"
 echo ">>> exit;"

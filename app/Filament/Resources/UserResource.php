@@ -28,31 +28,31 @@ class UserResource extends Resource
                 Forms\Components\Section::make('Informations utilisateur')
                     ->schema([
                         Forms\Components\TextInput::make('name')
-                            ->label('Nom')
+                            ->label(__('Name'))
                             ->required()
                             ->maxLength(255),
                         Forms\Components\TextInput::make('email')
-                            ->label('Email')
+                            ->label(__('Email'))
                             ->email()
                             ->required()
                             ->maxLength(255)
                             ->unique(ignoreRecord: true),
                         Forms\Components\TextInput::make('password')
-                            ->label('Mot de passe')
+                            ->label(__('Password'))
                             ->password()
                             ->dehydrateStateUsing(fn ($state) => Hash::make($state))
                             ->dehydrated(fn ($state) => filled($state))
                             ->required(fn (string $operation): bool => $operation === 'create'),
                     ])->columns(2),
-                Forms\Components\Section::make('Rôles et groupes')
+                Forms\Components\Section::make('Roles and groups')
                     ->schema([
                         Forms\Components\Select::make('roles')
-                            ->label('Rôles')
+                            ->label(__('Roles'))
                             ->relationship('roles', 'name')
                             ->multiple()
                             ->preload(),
                         Forms\Components\Select::make('groups')
-                            ->label('Groupes')
+                            ->label(__('Groups'))
                             ->relationship('groups', 'name')
                             ->multiple()
                             ->preload(),
@@ -65,28 +65,28 @@ class UserResource extends Resource
         return $table
             ->columns([
                 Tables\Columns\TextColumn::make('name')
-                    ->label('Nom')
+                    ->label(__('Name'))
                     ->searchable()
                     ->sortable(),
                 Tables\Columns\TextColumn::make('email')
-                    ->label('Email')
+                    ->label(__('Email'))
                     ->searchable()
                     ->sortable(),
                 Tables\Columns\TextColumn::make('roles.name')
-                    ->label('Rôles')
+                    ->label(__('Roles'))
                     ->badge()
                     ->color('success'),
                 Tables\Columns\TextColumn::make('groups.name')
-                    ->label('Groupes')
+                    ->label(__('Groups'))
                     ->badge()
                     ->color('info'),
                 Tables\Columns\TextColumn::make('created_at')
-                    ->label('Créé le')
+                    ->label(__('Created at'))
                     ->dateTime('d/m/Y H:i')
                     ->sortable()
                     ->toggleable(isToggledHiddenByDefault: true),
                 Tables\Columns\TextColumn::make('updated_at')
-                    ->label('Mis à jour le')
+                    ->label(__('Updated at'))
                     ->dateTime('d/m/Y H:i')
                     ->sortable()
                     ->toggleable(isToggledHiddenByDefault: true),

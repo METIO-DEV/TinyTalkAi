@@ -4,16 +4,16 @@ namespace App\Filament\Resources;
 
 use App\Filament\Resources\AIModelResource\Pages;
 use App\Models\AIModel;
-use App\Models\ModelInstallation;
+// use App\Models\ModelInstallation;
 use App\Services\ModelSyncService;
-use App\Jobs\InstallOllamaModel;
+// use App\Jobs\InstallOllamaModel;
 use Filament\Forms;
 use Filament\Forms\Form;
+use Filament\Notifications\Notification;
 use Filament\Resources\Resource;
 use Filament\Tables;
 use Filament\Tables\Actions\Action;
 use Filament\Tables\Table;
-use Filament\Notifications\Notification;
 
 class AIModelResource extends Resource
 {
@@ -36,21 +36,30 @@ class AIModelResource extends Resource
         return $form
             ->schema([
                 Forms\Components\TextInput::make('name')
-                    ->label('Nom')
+                    ->label(__('Name'))
                     ->required()
                     ->maxLength(255),
                 Forms\Components\TextInput::make('full_name')
-                    ->label('Nom complet (Ollama)')
+                    ->label(__('Full name (Ollama)'))
                     ->required()
                     ->maxLength(255),
                 Forms\Components\TextInput::make('size')
-                    ->label('Taille (bytes)')
+                    ->label(__('Size (bytes)'))
                     ->numeric()
                     ->disabled()
                     ->dehydrated(false),
                 Forms\Components\Toggle::make('is_active')
-                    ->label('Actif')
+                    ->label(__('Active'))
                     ->default(true),
+                Forms\Components\Select::make('groups')
+                    ->relationship(
+                        'groups',
+                        'name',
+                        modifyQueryUsing: fn ($query) => $query->select(['groups.id', 'groups.name'])->orderBy('groups.name')
+                    )
+                    ->multiple()
+                    ->preload()
+                    ->searchable(),
             ]);
     }
 
@@ -59,27 +68,33 @@ class AIModelResource extends Resource
         return $table
             ->columns([
                 Tables\Columns\TextColumn::make('name')
-                    ->label('Nom')
+                    ->label(__('Name'))
                     ->searchable()
                     ->sortable(),
                 Tables\Columns\TextColumn::make('full_name')
-                    ->label('Nom complet')
+                    ->label(__('Full name'))
                     ->searchable()
                     ->sortable(),
                 Tables\Columns\TextColumn::make('size')
-                    ->label('Taille')
+                    ->label(__('Size'))
                     ->formatStateUsing(function ($state) {
                         $bytes = (int) ($state ?? 0);
-                        $gb = $bytes > 0 ? number_format($bytes / (1024 * 1024 * 1024), 2) . ' GB' : '-';
+                        $gb = $bytes > 0 ? number_format($bytes / (1024 * 1024 * 1024), 2).' GB' : '-';
+
                         return $gb;
                     })
                     ->sortable(),
                 Tables\Columns\IconColumn::make('is_active')
-                    ->label('Actif')
+                    ->label(__('Active'))
                     ->boolean()
                     ->sortable(),
+                Tables\Columns\TextColumn::make('groups.name')
+                    ->label(__('Groups'))
+                    ->badge()
+                    ->color('success')
+                    ->searchable(),
                 Tables\Columns\TextColumn::make('last_synced_at')
-                    ->label('Dernière synchro')
+                    ->label(__('Last sync'))
                     ->dateTime()
                     ->sortable(),
             ])
@@ -87,6 +102,7 @@ class AIModelResource extends Resource
             ])
             // Make the table read-only: no per-row edit/delete actions
             ->actions([
+                // Tables\Actions\EditAction::make(),
             ])
             // No bulk delete
             ->bulkActions([
@@ -97,11 +113,11 @@ class AIModelResource extends Resource
             ->poll('2s')
             ->headerActions([
                 Action::make('syncFromOllama')
-                    ->label('Synchroniser depuis Ollama')
+                    ->label(__('Sync from Ollama'))
                     ->icon('heroicon-o-arrow-path')
                     ->form([
                         Forms\Components\Toggle::make('deactivate_missing')
-                            ->label('Désactiver les modèles manquants')
+                            ->label(__('Deactivate missing models'))
                             ->default(false),
                     ])
                     ->action(function (array $data) {
@@ -109,51 +125,51 @@ class AIModelResource extends Resource
                         $stats = $service->sync((bool) ($data['deactivate_missing'] ?? false));
 
                         Notification::make()
-                            ->title('Synchronisation terminée')
+                            ->title(__('Sync completed'))
                             ->body("Créés: {$stats['created']} — Mis à jour: {$stats['updated']} — Désactivés: {$stats['deactivated']} — Ignorés: {$stats['skipped']}")
                             ->success()
                             ->send();
                     }),
-                Action::make('installOllamaModel')
-                    ->label('Installer un modèle')
-                    ->icon('heroicon-o-cloud-arrow-down')
-                    ->modalHeading('Installer un modèle Ollama')
-                    ->form([
-                        Forms\Components\TextInput::make('full_name')
-                            ->label('Nom complet du modèle (ex: llama3:8b)')
-                            ->required()
-                            ->maxLength(255),
-                    ])
-                    ->action(function (array $data) {
-                        $fullName = trim((string) ($data['full_name'] ?? ''));
-                        if ($fullName === '') {
-                            Notification::make()->title('Nom de modèle manquant')->danger()->send();
-                            return;
-                        }
+                // Action::make('installOllamaModel')
+                //     ->label(__('Install Ollama model'))
+                //     ->icon('heroicon-o-cloud-arrow-down')
+                //     ->modalHeading(__('Install Ollama model'))
+                //     ->form([
+                //         Forms\Components\TextInput::make('full_name')
+                //             ->label(__('Full name of the model (ex: llama3:8b)'))
+                //             ->required()
+                //             ->maxLength(255),
+                //     ])
+                //     ->action(function (array $data) {
+                //     $fullName = trim((string) ($data['full_name'] ?? ''));
+                //     if ($fullName === '') {
+                //         Notification::make()->title(__('Model name missing'))->danger()->send();
+                //         return;
+                //     }
 
-                        $userId = auth()->id();
-                        if (! $userId) {
-                            Notification::make()->title('Utilisateur non authentifié')->danger()->send();
-                            return;
-                        }
+                //     $userId = auth()->id();
+                //     if (! $userId) {
+                //         Notification::make()->title(__('User not authenticated'))->danger()->send();
+                //         return;
+                //     }
 
-                        // Pré-créer une ligne de suivi pour affichage immédiat dans le widget
-                        $installation = ModelInstallation::create([
-                            'user_id' => $userId,
-                            'full_name' => $fullName,
-                            'status' => 'queued',
-                            'progress' => null,
-                            'status_text' => 'En attente du worker…',
-                        ]);
+                //     // Pré-créer une ligne de suivi pour affichage immédiat dans le widget
+                //     $installation = ModelInstallation::create([
+                //         'user_id' => $userId,
+                //         'full_name' => $fullName,
+                //         'status' => 'queued',
+                //         'progress' => null,
+                //         'status_text' => 'En attente du worker…',
+                //     ]);
 
-                        InstallOllamaModel::dispatch($fullName, $userId, $installation->id);
+                //     InstallOllamaModel::dispatch($fullName, $userId, $installation->id);
 
-                        Notification::make()
-                            ->title('Téléchargement en cours')
-                            ->body($fullName)
-                            ->info()
-                            ->send();
-                    })
+                //     Notification::make()
+                //         ->title(__('Downloading in progress'))
+                //         ->body($fullName)
+                //         ->info()
+                //         ->send();
+                // })
             ]);
     }
 

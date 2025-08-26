@@ -17,6 +17,9 @@ class DatabaseSeeder extends Seeder
         // Exécuter le seeder de permissions en premier
         $this->call(PermissionSeeder::class);
 
+        // Exécuter le seeder pour assigner les modèles aux groupes
+        $this->call(ModelGroupSeeder::class);
+
         // Créer un utilisateur admin
         $admin = User::factory()->create([
             'name' => 'Admin',
@@ -27,15 +30,15 @@ class DatabaseSeeder extends Seeder
         // Assigner le rôle admin
         $admin->assignRole('admin');
 
-        // Créer un super-admin
-        $superAdmin = User::factory()->create([
-            'name' => 'Super Admin',
+        // Créer un second admin (ancien super-admin)
+        $secondAdmin = User::factory()->create([
+            'name' => 'Gaston Admin',
             'email' => 'gaston@metio.fr',
             'password' => Hash::make('12345678'),
         ]);
 
-        // Assigner le rôle super-admin
-        $superAdmin->assignRole('super-admin');
+        // Assigner le rôle admin
+        $secondAdmin->assignRole('admin');
 
         // Créer un utilisateur de test
         User::factory()->create([

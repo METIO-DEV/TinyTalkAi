@@ -3,6 +3,7 @@
 namespace App\Livewire;
 
 use App\Models\AIModel;
+use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Log;
 use Livewire\Component;
 
@@ -23,6 +24,7 @@ class ModelSelector extends Component
      */
     protected $listeners = [
         'modelSelected' => 'updateSelectedModel',
+        'refreshModels' => 'fetchAvailableModels',
     ];
 
     /**
@@ -44,18 +46,62 @@ class ModelSelector extends Component
             // Émettre un événement pour informer les autres composants
             $this->dispatch('modelSelected', $this->selectedModel);
         }
+
+        // Si un modèle est sélectionné mais qu'aucun modèle n'est disponible, réinitialiser la sélection
+        if (! empty($this->selectedModel) && empty($this->availableModels)) {
+            $this->selectedModel = '';
+            session(['selected_model' => '']);
+
+            // Émettre un événement pour informer les autres composants
+            $this->dispatch('modelSelected', $this->selectedModel);
+
+            // Notifier l'utilisateur si connecté
+            if (Auth::check()) {
+                $this->dispatch('showNotification', [
+                    'type' => 'warning',
+                    'message' => 'Vous n\'avez accès à aucun modèle. Veuillez contacter un administrateur.',
+                ]);
+            }
+        }
     }
 
     /**
      * Récupère la liste des modèles disponibles via la base de données (Filament admin)
+     * et filtre selon les groupes de l'utilisateur
      */
-    private function fetchAvailableModels()
+    public function fetchAvailableModels()
     {
         try {
-            $models = AIModel::query()
-                ->where('is_active', true)
-                ->orderBy('name')
-                ->get(['full_name', 'size']);
+            $user = Auth::user();
+            $userGroups = $user ? $user->groups->pluck('id')->toArray() : [];
+
+            // Si l'utilisateur est connecté mais n'a pas de groupes, retourner une liste vide
+            if ($user && empty($userGroups)) {
+                $this->availableModels = [];
+
+                // Log pour débogage
+                Log::debug('Aucun modèle disponible car l\'utilisateur n\'appartient à aucun groupe', [
+                    'user_id' => $user->id,
+                ]);
+
+                // Revalider la sélection
+                $this->resetSelectionAfterRefresh();
+
+                return;
+            }
+
+            // Requête de base pour les modèles actifs
+            $query = AIModel::query()->where('is_active', true);
+
+            // Filtrer par groupes pour tous les utilisateurs (y compris les admins)
+            if ($user && ! empty($userGroups)) {
+                // Récupérer les modèles associés aux groupes de l'utilisateur
+                $query->whereHas('groups', function ($q) use ($userGroups) {
+                    $q->whereIn('groups.id', $userGroups);
+                });
+            }
+
+            $models = $query->orderBy('name')->get(['full_name', 'size']);
 
             $embeddingModel = config('services.ollama.embedding_model', 'nomic-embed-text');
 
@@ -72,6 +118,7 @@ class ModelSelector extends Component
                 if (str_contains($full, 'bomic-embed')) {
                     return false;
                 }
+
                 return true;
             })->map(function ($m) {
                 return [
@@ -80,9 +127,56 @@ class ModelSelector extends Component
                     'size' => (int) ($m->size ?? 0),
                 ];
             })->values()->toArray();
+
+            // Log pour débogage
+            Log::debug('Modèles disponibles pour l\'utilisateur', [
+                'user_id' => $user ? $user->id : 'non connecté',
+                'user_groups' => $userGroups,
+                'models_count' => count($this->availableModels),
+            ]);
         } catch (\Exception $e) {
-            Log::error('Erreur lors du chargement des modèles depuis la BD: ' . $e->getMessage());
+            Log::error('Erreur lors du chargement des modèles depuis la BD: '.$e->getMessage());
             $this->availableModels = [];
+        }
+
+        // Revalider la sélection après rafraîchissement
+        $this->resetSelectionAfterRefresh();
+    }
+
+    /**
+     * Ajuste selectedModel pour rester cohérent avec la liste actualisée
+     */
+    private function resetSelectionAfterRefresh(): void
+    {
+        $names = array_map(fn ($m) => $m['name'], $this->availableModels);
+
+        // Si le modèle sélectionné actuel n'est plus disponible
+        if (! empty($this->selectedModel) && ! in_array($this->selectedModel, $names, true)) {
+            if (! empty($this->availableModels)) {
+                // Sélectionner le premier modèle disponible
+                $this->selectedModel = $this->availableModels[0]['name'];
+                session(['selected_model' => $this->selectedModel]);
+                $this->dispatch('modelSelected', $this->selectedModel);
+            } else {
+                // Aucune option : vider la sélection
+                $this->selectedModel = '';
+                session(['selected_model' => '']);
+                $this->dispatch('modelSelected', $this->selectedModel);
+            }
+
+            return;
+        }
+
+        // Si aucun modèle n'est sélectionné mais des modèles existent, sélectionner le premier
+        if (empty($this->selectedModel) && ! empty($this->availableModels)) {
+            $this->selectedModel = $this->availableModels[0]['name'];
+            session(['selected_model' => $this->selectedModel]);
+            $this->dispatch('modelSelected', $this->selectedModel);
+        }
+
+        // Si aucun modèle disponible, s'assurer que la session est vide
+        if (empty($this->availableModels)) {
+            session(['selected_model' => '']);
         }
     }
 

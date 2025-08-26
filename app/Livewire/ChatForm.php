@@ -2,6 +2,7 @@
 
 namespace App\Livewire;
 
+use App\Models\AIModel;
 use App\Models\Conversation;
 use App\Models\Message;
 use App\Services\ConversationMemoryService;
@@ -98,6 +99,9 @@ class ChatForm extends Component
         $this->ragEnabled = session('rag_enabled', false);
         $this->selectedCollection = session('selected_collection', null);
 
+        // Vérifier si le modèle sélectionné est accessible pour l'utilisateur
+        $this->checkModelAccess();
+
         // Notifier les autres composants de l'état initial
         $this->dispatch('ragToggled', $this->ragEnabled);
         $this->dispatch('collectionSelected', $this->selectedCollection);
@@ -106,6 +110,103 @@ class ChatForm extends Component
         $conversationId = session('selected_conversation_id');
         if ($conversationId) {
             $this->loadConversation($conversationId);
+        }
+    }
+
+    /**
+     * Vérifie si l'utilisateur a accès au modèle sélectionné
+     * Si non, sélectionne un modèle accessible par défaut
+     */
+    private function checkModelAccess()
+    {
+        // Si aucun modèle n'est sélectionné ou si l'utilisateur est admin, pas besoin de vérifier
+        if (empty($this->selectedModel) || ! Auth::check() || (Auth::check() && Auth::user()->hasRole('admin'))) {
+            return;
+        }
+
+        try {
+            $user = Auth::user();
+
+            // Vérifier si l'utilisateur a des groupes
+            if ($user->groups->isEmpty()) {
+                // L'utilisateur n'a pas de groupes, donc pas d'accès aux modèles
+                $this->selectedModel = '';
+                session(['selected_model' => '']);
+
+                // Notifier l'utilisateur
+                $this->dispatch('showNotification', [
+                    'type' => 'error',
+                    'message' => 'Vous n\'avez accès à aucun modèle car vous n\'appartenez à aucun groupe. Veuillez contacter un administrateur.',
+                ]);
+
+                Log::error('Utilisateur sans groupe, aucun modèle accessible', [
+                    'user_id' => $user->id,
+                ]);
+
+                return;
+            }
+
+            $userGroups = $user->groups->pluck('id')->toArray();
+
+            // Vérifier si le modèle sélectionné est accessible pour l'utilisateur
+            $modelExists = AIModel::where('full_name', $this->selectedModel)
+                ->where('is_active', true)
+                ->whereHas('groups', function ($query) use ($userGroups) {
+                    $query->whereIn('groups.id', $userGroups);
+                })
+                ->exists();
+
+            if (! $modelExists) {
+                Log::warning('Modèle non accessible pour l\'utilisateur, recherche d\'un modèle alternatif', [
+                    'user_id' => $user->id,
+                    'selected_model' => $this->selectedModel,
+                    'user_groups' => $userGroups,
+                ]);
+
+                // Trouver un modèle accessible pour l'utilisateur
+                $alternativeModel = AIModel::where('is_active', true)
+                    ->whereHas('groups', function ($query) use ($userGroups) {
+                        $query->whereIn('groups.id', $userGroups);
+                    })
+                    ->orderBy('name')
+                    ->first();
+
+                if ($alternativeModel) {
+                    $this->selectedModel = $alternativeModel->full_name;
+                    session(['selected_model' => $this->selectedModel]);
+
+                    // Émettre un événement pour informer les autres composants
+                    $this->dispatch('modelSelected', $this->selectedModel);
+
+                    // Notifier l'utilisateur
+                    $this->dispatch('showNotification', [
+                        'type' => 'warning',
+                        'message' => 'Le modèle précédemment sélectionné n\'est pas accessible. Un modèle alternatif a été sélectionné automatiquement.',
+                    ]);
+
+                    Log::info('Modèle alternatif sélectionné', [
+                        'user_id' => $user->id,
+                        'new_model' => $this->selectedModel,
+                    ]);
+                } else {
+                    // Aucun modèle accessible trouvé
+                    $this->selectedModel = '';
+                    session(['selected_model' => '']);
+
+                    // Notifier l'utilisateur
+                    $this->dispatch('showNotification', [
+                        'type' => 'error',
+                        'message' => 'Aucun modèle accessible n\'a été trouvé pour votre compte. Veuillez contacter un administrateur.',
+                    ]);
+
+                    Log::error('Aucun modèle accessible pour l\'utilisateur', [
+                        'user_id' => $user->id,
+                        'user_groups' => $userGroups,
+                    ]);
+                }
+            }
+        } catch (\Exception $e) {
+            Log::error('Erreur lors de la vérification de l\'accès au modèle: '.$e->getMessage());
         }
     }
 
@@ -160,6 +261,9 @@ class ChatForm extends Component
     public function updateSelectedModel(string $modelName)
     {
         $this->selectedModel = $modelName;
+
+        // Vérifier si l'utilisateur a accès à ce modèle
+        $this->checkModelAccess();
 
         // Réinitialiser l'ID de conversation seulement si l'événement vient de la sélection d'un modèle
         // et non pas du chargement d'une conversation existante
@@ -222,6 +326,9 @@ class ChatForm extends Component
                 if ($conversation->model_name) {
                     $this->selectedModel = $conversation->model_name;
                     session(['selected_model' => $this->selectedModel]);
+
+                    // Vérifier si l'utilisateur a toujours accès à ce modèle
+                    $this->checkModelAccess();
 
                     // Émettre un événement pour informer les autres composants du changement de modèle
                     $this->dispatch('modelSelected', $this->selectedModel);
@@ -294,6 +401,16 @@ class ChatForm extends Component
 
         // Vérifier si un modèle est sélectionné
         if (empty($this->selectedModel)) {
+            // Notifier l'utilisateur qu'aucun modèle n'est disponible
+            $this->dispatch('showNotification', [
+                'type' => 'error',
+                'message' => 'Aucun modèle n\'est disponible. Veuillez contacter un administrateur pour obtenir l\'accès à des modèles.',
+            ]);
+
+            Log::error('Tentative d\'envoi de message sans modèle sélectionné', [
+                'user_id' => Auth::check() ? Auth::id() : 'non connecté',
+            ]);
+
             return;
         }
 

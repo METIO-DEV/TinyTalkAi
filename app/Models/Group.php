@@ -23,4 +23,12 @@ class Group extends Model
     {
         return $this->belongsToMany(Collection::class);
     }
+
+    /**
+     * Les modèles AI associés à ce groupe
+     */
+    public function models()
+    {
+        return $this->belongsToMany(AIModel::class, 'model_group', 'group_id', 'model_id');
+    }
 }

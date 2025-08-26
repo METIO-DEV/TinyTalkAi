@@ -20,6 +20,7 @@ class ModelInstallationsWidget extends BaseWidget
     protected function getTableQuery(): Builder
     {
         $userId = Filament::auth()?->id();
+
         return ModelInstallation::query()
             ->when($userId, fn ($q) => $q->where('user_id', $userId))
             ->latest();
@@ -62,6 +63,7 @@ class ModelInstallationsWidget extends BaseWidget
                             <div class="text-xs mt-1">{$percent}%</div>
                         </div>
                     HTML;
+
                     return $bar;
                 })
                 ->html(),

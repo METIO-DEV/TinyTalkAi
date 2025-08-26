@@ -27,12 +27,12 @@ class RoleResource extends Resource
                 Forms\Components\Section::make('Informations du rôle')
                     ->schema([
                         Forms\Components\TextInput::make('name')
-                            ->label('Nom')
+                            ->label(__('Name'))
                             ->required()
                             ->maxLength(255)
                             ->unique(ignoreRecord: true),
                         Forms\Components\Select::make('guard_name')
-                            ->label('Guard')
+                            ->label(__('Guard'))
                             ->options([
                                 'web' => 'Web',
                                 'api' => 'API',
@@ -43,7 +43,7 @@ class RoleResource extends Resource
                 Forms\Components\Section::make('Permissions')
                     ->schema([
                         Forms\Components\CheckboxList::make('permissions')
-                            ->label('Permissions')
+                            ->label(__('Permissions'))
                             ->relationship('permissions', 'name')
                             ->columns(2)
                             ->searchable()
@@ -57,24 +57,24 @@ class RoleResource extends Resource
         return $table
             ->columns([
                 Tables\Columns\TextColumn::make('name')
-                    ->label('Nom')
+                    ->label(__('Name'))
                     ->searchable()
                     ->sortable(),
-                Tables\Columns\TextColumn::make('guard_name')
-                    ->label('Guard')
+                Tables\Columns\TextColumn::make('guard_name') // web or api ?
+                    ->label(__('Guard'))
                     ->searchable()
                     ->sortable(),
                 Tables\Columns\TextColumn::make('permissions_count')
-                    ->label('Nombre de permissions')
+                    ->label(__('Permissions count'))
                     ->counts('permissions')
                     ->sortable(),
                 Tables\Columns\TextColumn::make('created_at')
-                    ->label('Créé le')
+                    ->label(__('Created at'))
                     ->dateTime('d/m/Y H:i')
                     ->sortable()
                     ->toggleable(isToggledHiddenByDefault: true),
                 Tables\Columns\TextColumn::make('updated_at')
-                    ->label('Mis à jour le')
+                    ->label(__('Updated at'))
                     ->dateTime('d/m/Y H:i')
                     ->sortable()
                     ->toggleable(isToggledHiddenByDefault: true),
@@ -86,8 +86,8 @@ class RoleResource extends Resource
                 Tables\Actions\EditAction::make(),
                 Tables\Actions\DeleteAction::make()
                     ->before(function ($record) {
-                        // Empêcher la suppression des rôles admin et super-admin
-                        if (in_array($record->name, ['admin', 'super-admin'])) {
+                        // Empêcher la suppression du rôle admin
+                        if ($record->name === 'admin') {
                             $record->users()->detach();
                         }
                     }),
@@ -96,9 +96,9 @@ class RoleResource extends Resource
                 Tables\Actions\BulkActionGroup::make([
                     Tables\Actions\DeleteBulkAction::make()
                         ->before(function ($records) {
-                            // Filtrer les rôles admin et super-admin
+                            // Filtrer le rôle admin
                             $records = $records->filter(function ($record) {
-                                return ! in_array($record->name, ['admin', 'super-admin']);
+                                return $record->name !== 'admin';
                             });
                         }),
                 ]),

@@ -3,13 +3,13 @@
 namespace App\Services;
 
 use App\Models\AIModel;
-use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Log;
 
 class ModelSyncService
 {
     protected string $ollamaHost;
+
     protected string $ollamaPort;
 
     public function __construct()
@@ -21,7 +21,7 @@ class ModelSyncService
     /**
      * Synchronise les modèles de génération depuis Ollama dans la base de données.
      *
-     * @param bool $deactivateMissing Si true, désactive (is_active=false) les modèles absents du serveur Ollama
+     * @param  bool  $deactivateMissing  Si true, désactive (is_active=false) les modèles absents du serveur Ollama
      * @return array{created:int,updated:int,deactivated:int,skipped:int,errors:int}
      */
     public function sync(bool $deactivateMissing = false): array
@@ -58,12 +58,14 @@ class ModelSyncService
                 $fullName = $model['name'] ?? null;
                 if (empty($fullName)) {
                     $stats['skipped']++;
+
                     continue;
                 }
 
                 // Filtrage: ignorer les modèles d'embedding
                 if ($this->isEmbeddingModel($fullName)) {
                     $stats['skipped']++;
+
                     continue;
                 }
 
@@ -140,16 +142,19 @@ class ModelSyncService
                     'status' => $response->status(),
                     'body' => $response->body(),
                 ]);
+
                 return false;
             }
             $list = $response->json('models', []);
             $target = collect($list)->firstWhere('name', $fullName);
             if (! $target) {
                 Log::warning('ModelSyncService::syncOne: modèle non trouvé dans /api/tags', ['fullName' => $fullName]);
+
                 return false;
             }
             if ($this->isEmbeddingModel($fullName)) {
                 Log::info('ModelSyncService::syncOne: modèle ignoré (embedding)', ['fullName' => $fullName]);
+
                 return false;
             }
             $shortName = explode(':', $fullName)[0];
@@ -165,6 +170,7 @@ class ModelSyncService
                     'is_active' => true,
                     'last_synced_at' => $now,
                 ]);
+
                 return true;
             }
             $record->fill([
@@ -178,11 +184,13 @@ class ModelSyncService
             } else {
                 $record->touch();
             }
+
             return true;
         } catch (\Throwable $e) {
             Log::error('ModelSyncService::syncOne exception', [
                 'message' => $e->getMessage(),
             ]);
+
             return false;
         }
     }

@@ -26,7 +26,7 @@
                 @endforeach
             @else
                 <div class="text-sm text-gray-500 dark:text-gray-300 px-3 py-2 text-center">
-                    Aucune conversation enregistrée
+                    {{ __('Aucune conversation enregistrée') }}
                 </div>
             @endif
         </div>

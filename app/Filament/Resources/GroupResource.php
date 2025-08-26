@@ -38,6 +38,16 @@ class GroupResource extends Resource
                     ->multiple()
                     ->preload()
                     ->searchable(),
+                Forms\Components\Select::make('models')
+                    ->label(__('Models'))
+                    ->relationship(
+                        'models',
+                        'name',
+                        modifyQueryUsing: fn ($query) => $query->where('models.is_active', true)->select(['models.id', 'models.name'])->orderBy('models.name')
+                    )
+                    ->multiple()
+                    ->preload()
+                    ->searchable(),
             ]);
     }
 
@@ -46,16 +56,25 @@ class GroupResource extends Resource
         return $table
             ->columns([
                 Tables\Columns\TextColumn::make('name')
+                    ->label(__('Name'))
                     ->searchable(),
                 Tables\Columns\TextColumn::make('collections.name')
+                    ->label(__('Collections'))
                     ->badge()
                     ->color('primary')
                     ->searchable(),
+                Tables\Columns\TextColumn::make('models.name')
+                    ->label(__('Models'))
+                    ->badge()
+                    ->color('success')
+                    ->searchable(),
                 Tables\Columns\TextColumn::make('created_at')
+                    ->label(__('Created at'))
                     ->dateTime()
                     ->sortable()
                     ->toggleable(isToggledHiddenByDefault: true),
                 Tables\Columns\TextColumn::make('updated_at')
+                    ->label(__('Updated at'))
                     ->dateTime()
                     ->sortable()
                     ->toggleable(isToggledHiddenByDefault: true),
@@ -65,10 +84,23 @@ class GroupResource extends Resource
             ])
             ->actions([
                 Tables\Actions\EditAction::make(),
+                Tables\Actions\DeleteAction::make()
+                    ->before(function ($record) {
+                        // Empêcher la suppression du rôle admin
+                        if ($record->name === 'admin') {
+                            $record->users()->detach();
+                        }
+                    }),
             ])
             ->bulkActions([
                 Tables\Actions\BulkActionGroup::make([
-                    Tables\Actions\DeleteBulkAction::make(),
+                    Tables\Actions\DeleteBulkAction::make()
+                        ->before(function ($records) {
+                            // Filtrer le rôle admin
+                            $records = $records->filter(function ($record) {
+                                return $record->name !== 'admin';
+                            });
+                        }),
                 ]),
             ]);
     }

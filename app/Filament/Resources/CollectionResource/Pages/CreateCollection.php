@@ -2,6 +2,7 @@
 
 namespace App\Filament\Resources\CollectionResource\Pages;
 
+use App\Events\CollectionChanged;
 use App\Filament\Resources\CollectionResource;
 use App\Services\QdrantCollectionsService;
 use Filament\Notifications\Notification;
@@ -42,5 +43,8 @@ class CreateCollection extends CreateRecord
                 ->warning()
                 ->send();
         }
+
+        // Déclencher l'événement de création de collection pour les mises à jour en temps réel
+        event(new CollectionChanged('created', $collection));
     }
 }

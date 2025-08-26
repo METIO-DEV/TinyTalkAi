@@ -13,6 +13,7 @@
         "livewire/livewire": "^3.4",
         "livewire/volt": "^1.7.0",
         "phpoffice/phpword": "^1.4",
+        "pusher/pusher-php-server": "^7.2",
         "smalot/pdfparser": "^2.12",
         "spatie/laravel-permission": "^6.21"
     },

@@ -23,15 +23,18 @@ class CollectionResource extends Resource
         return $form
             ->schema([
                 Forms\Components\TextInput::make('name')
+                    ->label(__('Name'))
                     ->required()
                     ->unique(ignoreRecord: true)
                     ->maxLength(255),
                 Forms\Components\Textarea::make('description')
+                    ->label(__('Description'))
                     ->columnSpanFull(),
                 Forms\Components\Toggle::make('is_active')
-                    ->label('Actif')
+                    ->label(__('Active'))
                     ->default(true),
                 Forms\Components\Select::make('groups')
+                    ->label(__('Groups'))
                     ->relationship(
                         'groups',
                         'name',
@@ -66,17 +69,30 @@ class CollectionResource extends Resource
             ->filters([
                 Tables\Filters\SelectFilter::make('is_active')
                     ->options([
-                        '1' => 'Actif',
-                        '0' => 'Inactif',
+                        '1' => __('Active'),
+                        '0' => __('Inactive'),
                     ])
-                    ->label('Statut'),
+                    ->label(__('Status')),
             ])
             ->actions([
                 Tables\Actions\EditAction::make(),
+                Tables\Actions\DeleteAction::make()
+                    ->before(function ($record) {
+                        // Empêcher la suppression du rôle admin
+                        if ($record->name === 'admin') {
+                            $record->users()->detach();
+                        }
+                    }),
             ])
             ->bulkActions([
                 Tables\Actions\BulkActionGroup::make([
-                    Tables\Actions\DeleteBulkAction::make(),
+                    Tables\Actions\DeleteBulkAction::make()
+                        ->before(function ($records) {
+                            // Filtrer le rôle admin
+                            $records = $records->filter(function ($record) {
+                                return $record->name !== 'admin';
+                            });
+                        }),
                 ]),
             ]);
     }
