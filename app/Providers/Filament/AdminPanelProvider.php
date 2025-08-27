@@ -56,8 +56,8 @@ class AdminPanelProvider extends PanelProvider
             ])
             ->brandName('TinyTalkAI Admin')
             ->navigationItems([
-                NavigationItem::make('Quitter')
-                    ->group('Quitter l\'administration')
+                NavigationItem::make(__('Exit'))
+                    ->group(__('Exit admin'))
                     ->url('/', shouldOpenInNewTab: false)
                     ->icon('heroicon-o-arrow-left')
                     ->sort(99),

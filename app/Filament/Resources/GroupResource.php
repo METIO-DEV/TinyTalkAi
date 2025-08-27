@@ -16,7 +16,10 @@ class GroupResource extends Resource
 
     protected static ?string $navigationIcon = 'heroicon-o-rectangle-stack';
 
-    protected static ?string $navigationLabel = 'Groupes';
+    public static function getNavigationLabel(): string
+    {
+        return __('Groupes');
+    }
 
     protected static ?int $navigationSort = 3;
 
@@ -33,11 +36,18 @@ class GroupResource extends Resource
                     ->relationship(
                         'collections',
                         'name',
-                        modifyQueryUsing: fn ($query) => $query->where('collections.is_active', true)->select(['collections.id', 'collections.name'])->orderBy('collections.name')
+                        modifyQueryUsing: fn ($query) => $query
+                            ->whereNull('collections.user_id')
+                            ->where('collections.is_active', true)
+                            ->select(['collections.id', 'collections.name'])
+                            ->orderBy('collections.name')
                     )
                     ->multiple()
                     ->preload()
-                    ->searchable(),
+                    ->searchable()
+                    ->saveRelationshipsUsing(function ($record, $state) {
+                        $record->syncCollections($state ? array_values((array) $state) : []);
+                    }),
                 Forms\Components\Select::make('models')
                     ->label(__('Models'))
                     ->relationship(
@@ -47,7 +57,10 @@ class GroupResource extends Resource
                     )
                     ->multiple()
                     ->preload()
-                    ->searchable(),
+                    ->searchable()
+                    ->saveRelationshipsUsing(function ($record, $state) {
+                        $record->syncModels($state ? array_values((array) $state) : []);
+                    }),
             ]);
     }
 
@@ -61,7 +74,7 @@ class GroupResource extends Resource
                 Tables\Columns\TextColumn::make('collections.name')
                     ->label(__('Collections'))
                     ->badge()
-                    ->color('primary')
+                    ->color('info')
                     ->searchable(),
                 Tables\Columns\TextColumn::make('models.name')
                     ->label(__('Models'))

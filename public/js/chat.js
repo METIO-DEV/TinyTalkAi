@@ -58,8 +58,24 @@ document.addEventListener('DOMContentLoaded', function() {
                     console.error('Livewire not available, cannot dispatch event');
                 }
             });
+
+        // S'abonner au canal 'users' pour les changements d'assignation de groupes
+        window.Echo.channel('users')
+            .listen('.UserGroupChanged', (event) => {
+                console.log('UserGroupChanged event received:', event);
+
+                if (window.Livewire) {
+                    // Les groupes de l'utilisateur impactent l'accès aux modèles et collections
+                    console.log('Dispatching refreshModels and refreshCollections events to Livewire...');
+                    window.Livewire.dispatch('refreshModels');
+                    window.Livewire.dispatch('refreshCollections');
+                    console.log('refreshModels & refreshCollections events dispatched');
+                } else {
+                    console.error('Livewire not available, cannot dispatch event');
+                }
+            });
         
-        console.log('Successfully subscribed to collections and models channels');
+        console.log('Successfully subscribed to collections, models and users channels');
     } else {
         console.error('Echo is not available. Check if Laravel Echo is properly initialized in bootstrap.js');
     }

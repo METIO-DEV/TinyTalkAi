@@ -1,6 +1,12 @@
 {
     "Profile": "Profil",
+    "Users": "Utilisateurs",
+    "Modèles LLM": "Modèles LLM",
+    "Roles": "Rôles",
+    "Groupes": "Groupes",
     "Administration": "Administration",
+    "Exit": "Quitter",
+    "Exit Admin": "Quitter l'administration",
     "Log Out": "Déconnexion",
     "Models": "Modèles",
     "Collections": "Collections",
@@ -77,5 +83,6 @@
     "Are you sure you want to delete your account?": "Êtes-vous sûr de vouloir supprimer votre compte?",
     "Log out of your account": "Se déconnecter de votre compte" ,
     "Fichier (.txt, .pdf, .docx uniquement, max 10MB)": "Fichier (.txt, .pdf, .docx uniquement, max 10MB)",
-    "Fichier (.txt, .pdf, .docx)": "Fichier (.txt, .pdf, .docx)"
+    "Fichier (.txt, .pdf, .docx)": "Fichier (.txt, .pdf, .docx)",
+    "Owned collections": "Collections possédées"
 }

@@ -148,6 +148,7 @@ class Collection extends Component
 
             // Initialiser le tableau des collections de la base de données
             $dbCollections = [];
+            $ownedCollections = [];
 
             if ($user) {
                 // Vérifier si l'utilisateur a des groupes
@@ -164,7 +165,7 @@ class Collection extends Component
                         ->toArray();
 
                     // Log pour debug
-                    Log::info('Collections trouvées pour l\'utilisateur', [
+                    Log::info('Collections via groupes pour l\'utilisateur', [
                         'user_id' => $user->id,
                         'groups' => $userGroups->pluck('id')->toArray(),
                         'collections' => $dbCollections,
@@ -172,6 +173,18 @@ class Collection extends Component
                 } else {
                     Log::info('L\'utilisateur n\'a pas de groupes', ['user_id' => $user->id]);
                 }
+
+                // Récupérer les collections possédées par l'utilisateur (indépendamment des groupes)
+                $ownedCollections = CollectionModel::where('user_id', $user->id)
+                    ->where('is_active', true)
+                    ->where('name', '!=', $defaultCollection)
+                    ->pluck('name')
+                    ->toArray();
+
+                Log::info('Collections possédées par l\'utilisateur', [
+                    'user_id' => $user->id,
+                    'owned_collections' => $ownedCollections,
+                ]);
             }
 
             // Récupérer les collections depuis Qdrant
@@ -185,8 +198,8 @@ class Collection extends Component
                 $this->collectionsService->createCollection($defaultCollection);
             }
 
-            // N'utiliser que les collections de la base de données (pas de fusion avec 'docs')
-            $this->collections = $dbCollections;
+            // Fusionner collections via groupes et collections possédées, sans doublons
+            $this->collections = array_values(array_unique(array_merge($dbCollections, $ownedCollections)));
 
             // Trier les collections par ordre alphabétique
             sort($this->collections);
@@ -211,6 +224,17 @@ class Collection extends Component
             ]);
             $this->statusMessage = 'Erreur lors du chargement des collections: '.$e->getMessage();
             $this->isProcessing = false;
+        }
+    }
+
+    /** ➋ — appelé lorsqu’on bascule le toggle RAG */
+    public function onRagToggled(bool $enabled): void
+    {
+        // Si on vient de passer RAG à OFF et qu’une collection était sélectionnée,
+        // on la désélectionne et on en informe les autres composants.
+        if (! $enabled && $this->selectedCollection !== null) {
+            $this->selectedCollection = null;
+            $this->dispatch('collectionSelected', null);
         }
     }
 
@@ -262,11 +286,13 @@ class Collection extends Component
 
             if ($result) {
                 // Création de la collection en base de données
+                $ownerId = auth()->id();
                 CollectionModel::create([
                     'name' => $this->collectionName,
                     'description' => 'Collection créée depuis l\'interface utilisateur',
                     'is_active' => true,
                     'metadata' => null,
+                    'user_id' => $ownerId,
                 ]);
 
                 Log::info('Collection: collection créée avec succès', [
@@ -292,17 +318,6 @@ class Collection extends Component
             $this->statusMessage = 'Une erreur est survenue: '.$e->getMessage();
         } finally {
             $this->isProcessing = false;
-        }
-    }
-
-    /** ➋ — appelé lorsqu’on bascule le toggle RAG */
-    public function onRagToggled(bool $enabled): void
-    {
-        // Si on vient de passer RAG à OFF et qu’une collection était sélectionnée,
-        // on la désélectionne et on en informe les autres composants.
-        if (! $enabled && $this->selectedCollection !== null) {
-            $this->selectedCollection = null;
-            $this->dispatch('collectionSelected', null);
         }
     }
 
@@ -529,7 +544,7 @@ class Collection extends Component
     protected function extractTextFromPdf(string $filePath): string
     {
         // Vérifier si la bibliothèque est installée
-        if (! class_exists('\Smalot\PdfParser\Parser')) {
+        if (! class_exists('\\Smalot\\PdfParser\\Parser')) {
             throw new \Exception('La bibliothèque smalot/pdfparser n\'est pas installée. Exécutez: composer require smalot/pdfparser');
         }
 
@@ -559,7 +574,7 @@ class Collection extends Component
     protected function extractTextFromDocx(string $filePath): string
     {
         // Vérifier si la bibliothèque est installée
-        if (! class_exists('\PhpOffice\PhpWord\IOFactory')) {
+        if (! class_exists('\\PhpOffice\\PhpWord\\IOFactory')) {
             throw new \Exception('La bibliothèque phpoffice/phpword n\'est pas installée. Exécutez: composer require phpoffice/phpword');
         }
 

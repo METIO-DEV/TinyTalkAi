@@ -16,6 +16,11 @@ class CollectionResource extends Resource
 
     protected static ?string $navigationIcon = 'heroicon-o-document-text';
 
+    public static function getNavigationLabel(): string
+    {
+        return __('Collections');
+    }
+
     protected static ?int $navigationSort = 4;
 
     public static function form(Form $form): Form
@@ -42,7 +47,10 @@ class CollectionResource extends Resource
                     )
                     ->multiple()
                     ->preload()
-                    ->searchable(),
+                    ->searchable()
+                    ->saveRelationshipsUsing(function ($record, $state) {
+                        $record->syncGroups($state ? array_values((array) $state) : []);
+                    }),
             ]);
     }
 

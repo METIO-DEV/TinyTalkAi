@@ -21,7 +21,10 @@ class AIModelResource extends Resource
 
     protected static ?string $navigationIcon = 'heroicon-o-cpu-chip';
 
-    protected static ?string $navigationLabel = 'Modèles LLM';
+    public static function getNavigationLabel(): string
+    {
+        return __('Modèles LLM');
+    }
 
     protected static ?int $navigationSort = 5;
 
@@ -59,7 +62,10 @@ class AIModelResource extends Resource
                     )
                     ->multiple()
                     ->preload()
-                    ->searchable(),
+                    ->searchable()
+                    ->saveRelationshipsUsing(function ($record, $state) {
+                        $record->syncGroups($state ? array_values((array) $state) : []);
+                    }),
             ]);
     }
 

@@ -17,7 +17,10 @@ class UserResource extends Resource
 
     protected static ?string $navigationIcon = 'heroicon-o-users';
 
-    protected static ?string $navigationLabel = 'Utilisateurs';
+    public static function getNavigationLabel(): string
+    {
+        return __('Users');
+    }
 
     protected static ?int $navigationSort = 1;
 
@@ -40,9 +43,11 @@ class UserResource extends Resource
                         Forms\Components\TextInput::make('password')
                             ->label(__('Password'))
                             ->password()
+                            ->autocomplete('new-password')
                             ->dehydrateStateUsing(fn ($state) => Hash::make($state))
                             ->dehydrated(fn ($state) => filled($state))
-                            ->required(fn (string $operation): bool => $operation === 'create'),
+                            ->required(fn (string $operation): bool => $operation === 'create')
+                            ->hidden(fn (string $operation): bool => $operation === 'edit'),
                     ])->columns(2),
                 Forms\Components\Section::make('Roles and groups')
                     ->schema([
@@ -53,10 +58,33 @@ class UserResource extends Resource
                             ->preload(),
                         Forms\Components\Select::make('groups')
                             ->label(__('Groups'))
-                            ->relationship('groups', 'name')
+                            ->relationship(
+                                'groups',
+                                'name',
+                                modifyQueryUsing: fn ($query) => $query->select(['groups.id', 'groups.name'])->orderBy('groups.name')
+                            )
                             ->multiple()
-                            ->preload(),
+                            ->preload()
+                            ->searchable()
+                            ->saveRelationshipsUsing(function ($record, $state) {
+                                $record->syncGroups($state ? array_values((array) $state) : []);
+                            }),
                     ])->columns(2),
+                Forms\Components\Section::make(__(' Owned collections'))
+                    ->schema([
+                        Forms\Components\Placeholder::make('owned_collections_list')
+                            ->label(__('Owned collections'))
+                            ->content(function (?User $record) {
+                                if (! $record) {
+                                    return '—';
+                                }
+                                $names = $record->collections()->pluck('name')->toArray();
+
+                                return empty($names) ? '—' : implode(', ', $names);
+                            }),
+                    ])
+                    ->columns(1)
+                    ->hidden(fn (string $operation): bool => $operation === 'create'),
             ]);
     }
 
@@ -80,6 +108,12 @@ class UserResource extends Resource
                     ->label(__('Groups'))
                     ->badge()
                     ->color('info'),
+                Tables\Columns\TextColumn::make('collections.name')
+                    ->label(__('Owned collections'))
+                    ->badge()
+                    ->color('warning')
+                    ->limit(3)
+                    ->tooltip(fn ($record) => $record->collections->pluck('name')->join(', ')),
                 Tables\Columns\TextColumn::make('created_at')
                     ->label(__('Created at'))
                     ->dateTime('d/m/Y H:i')

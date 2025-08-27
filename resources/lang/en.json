@@ -1,5 +1,9 @@
 {
     "Profile": "Profile",
+    "Users": "Users",
+    "Modèles LLM": "LLM Models",
+    "Roles": "Roles",
+    "Groups": "Groups",
     "Administration": "Administration",
     "Log Out": "Log Out",
     "Models": "Models",
@@ -76,5 +80,6 @@
     "Retour": "Back",
     "Fichier (.txt, .pdf, .docx uniquement, max 10MB)": "File (.txt, .pdf, .docx only, max 10MB)",
     "Fichier (.txt, .pdf, .docx)": "File (.txt, .pdf, .docx)",
-    "Entrez un titre pour le document": "Enter document title"
+    "Entrez un titre pour le document": "Enter document title",
+    "Owned collections": "Owned collections"
 }
