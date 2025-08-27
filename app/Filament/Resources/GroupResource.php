@@ -16,6 +16,13 @@ class GroupResource extends Resource
 
     protected static ?string $navigationIcon = 'heroicon-o-rectangle-stack';
 
+    public static function getNavigationLabel(): string
+    {
+        return __('Groupes');
+    }
+
+    protected static ?int $navigationSort = 3;
+
     public static function form(Form $form): Form
     {
         return $form
@@ -25,6 +32,35 @@ class GroupResource extends Resource
                     ->maxLength(255),
                 Forms\Components\Textarea::make('description')
                     ->columnSpanFull(),
+                Forms\Components\Select::make('collections')
+                    ->relationship(
+                        'collections',
+                        'name',
+                        modifyQueryUsing: fn ($query) => $query
+                            ->whereNull('collections.user_id')
+                            ->where('collections.is_active', true)
+                            ->select(['collections.id', 'collections.name'])
+                            ->orderBy('collections.name')
+                    )
+                    ->multiple()
+                    ->preload()
+                    ->searchable()
+                    ->saveRelationshipsUsing(function ($record, $state) {
+                        $record->syncCollections($state ? array_values((array) $state) : []);
+                    }),
+                Forms\Components\Select::make('models')
+                    ->label(__('Models'))
+                    ->relationship(
+                        'models',
+                        'name',
+                        modifyQueryUsing: fn ($query) => $query->where('models.is_active', true)->select(['models.id', 'models.name'])->orderBy('models.name')
+                    )
+                    ->multiple()
+                    ->preload()
+                    ->searchable()
+                    ->saveRelationshipsUsing(function ($record, $state) {
+                        $record->syncModels($state ? array_values((array) $state) : []);
+                    }),
             ]);
     }
 
@@ -33,12 +69,25 @@ class GroupResource extends Resource
         return $table
             ->columns([
                 Tables\Columns\TextColumn::make('name')
+                    ->label(__('Name'))
+                    ->searchable(),
+                Tables\Columns\TextColumn::make('collections.name')
+                    ->label(__('Collections'))
+                    ->badge()
+                    ->color('info')
+                    ->searchable(),
+                Tables\Columns\TextColumn::make('models.name')
+                    ->label(__('Models'))
+                    ->badge()
+                    ->color('success')
                     ->searchable(),
                 Tables\Columns\TextColumn::make('created_at')
+                    ->label(__('Created at'))
                     ->dateTime()
                     ->sortable()
                     ->toggleable(isToggledHiddenByDefault: true),
                 Tables\Columns\TextColumn::make('updated_at')
+                    ->label(__('Updated at'))
                     ->dateTime()
                     ->sortable()
                     ->toggleable(isToggledHiddenByDefault: true),
@@ -48,10 +97,23 @@ class GroupResource extends Resource
             ])
             ->actions([
                 Tables\Actions\EditAction::make(),
+                Tables\Actions\DeleteAction::make()
+                    ->before(function ($record) {
+                        // Empêcher la suppression du rôle admin
+                        if ($record->name === 'admin') {
+                            $record->users()->detach();
+                        }
+                    }),
             ])
             ->bulkActions([
                 Tables\Actions\BulkActionGroup::make([
-                    Tables\Actions\DeleteBulkAction::make(),
+                    Tables\Actions\DeleteBulkAction::make()
+                        ->before(function ($records) {
+                            // Filtrer le rôle admin
+                            $records = $records->filter(function ($record) {
+                                return $record->name !== 'admin';
+                            });
+                        }),
                 ]),
             ]);
     }

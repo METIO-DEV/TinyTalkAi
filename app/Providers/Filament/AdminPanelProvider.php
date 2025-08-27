@@ -2,11 +2,11 @@
 
 namespace App\Providers\Filament;
 
+use App\Filament\Resources\UserResource;
 use Filament\Http\Middleware\Authenticate;
 use Filament\Http\Middleware\DisableBladeIconComponents;
 use Filament\Http\Middleware\DispatchServingFilamentEvent;
 use Filament\Navigation\NavigationItem;
-use Filament\Pages;
 use Filament\Panel;
 use Filament\PanelProvider;
 use Filament\Support\Colors\Color;
@@ -30,18 +30,11 @@ class AdminPanelProvider extends PanelProvider
             ->login()
             ->colors([
                 'primary' => Color::hex('#000000'),
-                'gray' => Color::hex('#CDCDCD'),
-                'danger' => Color::Rose,
-                'info' => Color::Blue,
-                'success' => Color::Emerald,
-                'warning' => Color::Orange,
             ])
             ->favicon(asset('TinyTalkAi_Logo.png'))
             ->discoverResources(in: app_path('Filament/Resources'), for: 'App\\Filament\\Resources')
             ->discoverPages(in: app_path('Filament/Pages'), for: 'App\\Filament\\Pages')
-            ->pages([
-                Pages\Dashboard::class,
-            ])
+            ->homeUrl(fn () => UserResource::getUrl())
             ->discoverWidgets(in: app_path('Filament/Widgets'), for: 'App\\Filament\\Widgets')
             ->widgets([
                 Widgets\AccountWidget::class,
@@ -62,65 +55,12 @@ class AdminPanelProvider extends PanelProvider
                 Authenticate::class,
             ])
             ->brandName('TinyTalkAI Admin')
-            ->sidebarWidth('18rem') // Largeur plus importante pour la sidebar
-            ->collapsibleNavigationGroups(false) // Groupes toujours développés
-            ->navigationGroups([
-                'Gestion',
-                'Configuration',
-            ])
             ->navigationItems([
-                NavigationItem::make('Dashboard')
-                    ->icon('heroicon-o-home')
-                    ->isActiveWhen(fn (): bool => request()->routeIs('filament.admin.pages.dashboard'))
-                    ->url(fn (): string => \Filament\Pages\Dashboard::getUrl()),
-            ])
-            ->maxContentWidth('7xl')
-            ->viteTheme('resources/css/filament/admin/theme.css')
-            ->renderHook(
-                'panels::styles.before',
-                fn (): string => '
-                    <style>
-                        /* Styles personnalisés pour la sidebar */
-                        .fi-sidebar {
-                            color: white !important;
-                            transition: all 0.3s ease;
-                        }
-                        
-                        .fi-sidebar-item {
-                            margin-bottom: 0.5rem;
-                            border-radius: 0.5rem;
-                            transition: all 0.3s ease;
-                        }
-                        
-                        .fi-sidebar-item:hover {
-                            transform: translateX(5px);
-                        }
-                        
-                        .fi-sidebar-item-active {
-                            border-left: 4px solid white;
-                        }
-                        
-                        /* Amélioration du contraste des textes */
-                        .fi-sidebar-item-label {
-                            color: white !important;
-                            font-weight: 500;
-                        }
-                        
-                        /* Style du header de la sidebar */
-                        .fi-sidebar-header {
-                            border-bottom: 1px solid #333333;
-                            padding-bottom: 1rem;
-                        }
-                        
-                        /* Responsive fixes */
-                        @media (max-width: 768px) {
-                            .fi-sidebar {
-                                width: 100% !important;
-                                max-width: 100% !important;
-                            }
-                        }
-                    </style>
-                '
-            );
+                NavigationItem::make(__('Exit'))
+                    ->group(__('Exit admin'))
+                    ->url('/', shouldOpenInNewTab: false)
+                    ->icon('heroicon-o-arrow-left')
+                    ->sort(99),
+            ]);
     }
 }

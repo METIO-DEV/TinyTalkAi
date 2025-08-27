@@ -37,6 +37,10 @@ class PermissionSeeder extends Seeder
             // Permissions modèles Ollama
             'view models',
             'manage models',
+
+            // Permissions pour l'assignation de modèles aux groupes
+            'assign models to groups',
+            'view group models',
         ];
 
         foreach ($permissions as $permission) {
@@ -44,16 +48,8 @@ class PermissionSeeder extends Seeder
         }
 
         // Créer les rôles et assigner les permissions
-        $role = Role::create(['name' => 'super-admin']);
-        $role->givePermissionTo(Permission::all());
-
         $role = Role::create(['name' => 'admin']);
-        $role->givePermissionTo([
-            'view users', 'create users', 'edit users',
-            'view groups', 'create groups', 'edit groups',
-            'view roles',
-            'view models', 'manage models',
-        ]);
+        $role->givePermissionTo(Permission::all());
 
         $role = Role::create(['name' => 'user']);
         $role->givePermissionTo([]);

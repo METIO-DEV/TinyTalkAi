@@ -22,6 +22,11 @@
                             <a href="{{ route('profile') }}" class="flex justify-center items-center px-4 py-2 text-sm text-custom-black dark:text-custom-white rounded-md hover:bg-custom-mid-dark-mode dark:hover:bg-custom-mid-dark-mode">
                                 {{ __('Profile') }}
                             </a>
+                            @role('admin|super-admin')
+                            <a href="{{ url('/admin') }}" class="flex justify-center items-center px-4 py-2 text-sm text-custom-black dark:text-custom-white rounded-md hover:bg-custom-mid-dark-mode dark:hover:bg-custom-mid-dark-mode">
+                                {{ __('Administration') }}
+                            </a>
+                            @endrole
                             <livewire:logout /> <!-- Utilisation du composant "logout" Livewire -->
 
                             <!-- Utilisation de la méthode classique, avec un formulaire et une route qui effectue la déconnexion -->
@@ -46,7 +51,7 @@
                     <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 mr-1 transform transition-transform" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7" />
                     </svg>
-                    Modèles
+                    {{ __('Models') }}
                 </button>
             </h3>
         </div>
@@ -64,7 +69,7 @@
                     <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 mr-1 transform transition-transform" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7" />
                     </svg>
-                    Collections
+                    {{ __('Collections') }}
                 </button>
             </h3>
         </div>
@@ -81,7 +86,7 @@
                     <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 mr-1 transform transition-transform" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7" />
                     </svg>
-                    Historique
+                    {{ __('Conversation') }}
                 </button>
             </h3>
             <button 

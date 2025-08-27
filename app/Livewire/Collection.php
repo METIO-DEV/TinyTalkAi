@@ -2,6 +2,7 @@
 
 namespace App\Livewire;
 
+use App\Models\Collection as CollectionModel;
 use App\Services\QdrantCollectionsService;
 use App\Services\RagService;
 use Illuminate\Support\Facades\Log;
@@ -138,7 +139,83 @@ class Collection extends Component
     {
         try {
             $this->isProcessing = true;
-            $this->collections = $this->collectionsService->listCollections();
+
+            // Collection par défaut
+            $defaultCollection = config('services.qdrant.collection', 'docs');
+
+            // Récupérer l'utilisateur connecté
+            $user = auth()->user();
+
+            // Initialiser le tableau des collections de la base de données
+            $dbCollections = [];
+            $ownedCollections = [];
+
+            if ($user) {
+                // Vérifier si l'utilisateur a des groupes
+                $userGroups = $user->groups;
+
+                if ($userGroups && $userGroups->count() > 0) {
+                    // Récupérer les collections accessibles via les groupes de l'utilisateur
+                    $dbCollections = CollectionModel::whereHas('groups', function ($query) use ($userGroups) {
+                        $query->whereIn('groups.id', $userGroups->pluck('id'));
+                    })
+                        ->where('is_active', true)
+                        ->where('name', '!=', config('services.qdrant.collection', 'docs')) // Exclure la collection par défaut
+                        ->pluck('name')
+                        ->toArray();
+
+                    // Log pour debug
+                    Log::info('Collections via groupes pour l\'utilisateur', [
+                        'user_id' => $user->id,
+                        'groups' => $userGroups->pluck('id')->toArray(),
+                        'collections' => $dbCollections,
+                    ]);
+                } else {
+                    Log::info('L\'utilisateur n\'a pas de groupes', ['user_id' => $user->id]);
+                }
+
+                // Récupérer les collections possédées par l'utilisateur (indépendamment des groupes)
+                $ownedCollections = CollectionModel::where('user_id', $user->id)
+                    ->where('is_active', true)
+                    ->where('name', '!=', $defaultCollection)
+                    ->pluck('name')
+                    ->toArray();
+
+                Log::info('Collections possédées par l\'utilisateur', [
+                    'user_id' => $user->id,
+                    'owned_collections' => $ownedCollections,
+                ]);
+            }
+
+            // Récupérer les collections depuis Qdrant
+            $qdrantCollections = $this->collectionsService->listCollections();
+
+            // Ne garder aucune collection de Qdrant (exclure complètement 'docs')
+            $filteredQdrantCollections = [];
+
+            // S'assurer que la collection par défaut existe dans Qdrant pour les fonctionnalités de recherche
+            if (! in_array($defaultCollection, $qdrantCollections) && ! $this->collectionsService->collectionExists($defaultCollection)) {
+                $this->collectionsService->createCollection($defaultCollection);
+            }
+
+            // Fusionner collections via groupes et collections possédées, sans doublons
+            $this->collections = array_values(array_unique(array_merge($dbCollections, $ownedCollections)));
+
+            // Trier les collections par ordre alphabétique
+            sort($this->collections);
+
+            // Si aucune collection n'est disponible ou si la collection sélectionnée n'est pas dans la liste,
+            // réinitialiser selectedCollection
+            if (empty($this->collections) ||
+                ($this->selectedCollection !== null && ! in_array($this->selectedCollection, $this->collections))) {
+                Log::info('Réinitialisation de selectedCollection car collection non disponible', [
+                    'selectedCollection' => $this->selectedCollection,
+                    'availableCollections' => $this->collections,
+                ]);
+                $this->selectedCollection = null;
+                $this->dispatch('collectionSelected', null);
+            }
+
             $this->isProcessing = false;
         } catch (\Exception $e) {
             Log::error('Collection: erreur lors du chargement des collections: '.$e->getMessage(), [
@@ -147,6 +224,17 @@ class Collection extends Component
             ]);
             $this->statusMessage = 'Erreur lors du chargement des collections: '.$e->getMessage();
             $this->isProcessing = false;
+        }
+    }
+
+    /** ➋ — appelé lorsqu’on bascule le toggle RAG */
+    public function onRagToggled(bool $enabled): void
+    {
+        // Si on vient de passer RAG à OFF et qu’une collection était sélectionnée,
+        // on la désélectionne et on en informe les autres composants.
+        if (! $enabled && $this->selectedCollection !== null) {
+            $this->selectedCollection = null;
+            $this->dispatch('collectionSelected', null);
         }
     }
 
@@ -197,6 +285,16 @@ class Collection extends Component
             $result = $this->collectionsService->createCollection($this->collectionName);
 
             if ($result) {
+                // Création de la collection en base de données
+                $ownerId = auth()->id();
+                CollectionModel::create([
+                    'name' => $this->collectionName,
+                    'description' => 'Collection créée depuis l\'interface utilisateur',
+                    'is_active' => true,
+                    'metadata' => null,
+                    'user_id' => $ownerId,
+                ]);
+
                 Log::info('Collection: collection créée avec succès', [
                     'collectionName' => $this->collectionName,
                 ]);
@@ -220,17 +318,6 @@ class Collection extends Component
             $this->statusMessage = 'Une erreur est survenue: '.$e->getMessage();
         } finally {
             $this->isProcessing = false;
-        }
-    }
-
-    /** ➋ — appelé lorsqu’on bascule le toggle RAG */
-    public function onRagToggled(bool $enabled): void
-    {
-        // Si on vient de passer RAG à OFF et qu’une collection était sélectionnée,
-        // on la désélectionne et on en informe les autres composants.
-        if (! $enabled && $this->selectedCollection !== null) {
-            $this->selectedCollection = null;
-            $this->dispatch('collectionSelected', null);
         }
     }
 
@@ -266,6 +353,9 @@ class Collection extends Component
             $result = $this->collectionsService->deleteCollection($collectionName);
 
             if ($result) {
+                // Supprimer la collection de la base de données
+                CollectionModel::where('name', $collectionName)->delete();
+
                 Log::info('Collection: collection supprimée avec succès', [
                     'collectionName' => $collectionName,
                 ]);
@@ -454,7 +544,7 @@ class Collection extends Component
     protected function extractTextFromPdf(string $filePath): string
     {
         // Vérifier si la bibliothèque est installée
-        if (! class_exists('\Smalot\PdfParser\Parser')) {
+        if (! class_exists('\\Smalot\\PdfParser\\Parser')) {
             throw new \Exception('La bibliothèque smalot/pdfparser n\'est pas installée. Exécutez: composer require smalot/pdfparser');
         }
 
@@ -484,7 +574,7 @@ class Collection extends Component
     protected function extractTextFromDocx(string $filePath): string
     {
         // Vérifier si la bibliothèque est installée
-        if (! class_exists('\PhpOffice\PhpWord\IOFactory')) {
+        if (! class_exists('\\PhpOffice\\PhpWord\\IOFactory')) {
             throw new \Exception('La bibliothèque phpoffice/phpword n\'est pas installée. Exécutez: composer require phpoffice/phpword');
         }
 

@@ -4,6 +4,7 @@
               x-data="{ 
                   addUserMessage() {
                       if (!$wire.message.trim()) return;
+                      if ($wire.isSummarizing || $wire.isLoading) return;
                       $wire.sendMessage();
                   },
                   autoResize(el) {
@@ -28,9 +29,12 @@
                 x-on:keydown.enter="$event.shiftKey ? null : $event.preventDefault()"
                 x-on:keydown.enter.stop="if (!$event.shiftKey) { addUserMessage(); }"
                 class="flex-1 border border-custom-mid rounded-l-lg px-4 py-2 focus:outline-none focus:ring-2 focus:ring-custom-mid bg-custom-white text-custom-black dark:text-custom-white dark:border-custom-white dark:bg-custom-light-dark-mode resize-none min-h-[40px] max-h-[250px] overflow-y-auto" 
-                placeholder="{{ $selectedModel ? 'Écrivez à '.$selectedModel.'... (Shift+Enter pour un retour à la ligne)' : 'Sélectionnez un modèle...' }}"
+                placeholder="{{ $selectedModel ? __('Écrivez à') . ' ' . $selectedModel . '... ' . __('Shift+Enter pour un retour à la ligne') : __('Sélectionnez un modèle...') }}"
                 rows="1"
                 {{ $selectedModel ? '' : 'disabled' }}
+                {{ $isSummarizing ? 'disabled' : '' }}
+                wire:loading.attr="disabled"
+                wire:target="sendMessage"
             ></textarea>        
             <button 
                 type="submit" 
@@ -39,7 +43,8 @@
                 {{ $isSummarizing ? 'disabled' : '' }}
                 wire:loading.attr="disabled"
                 wire:loading.class="opacity-50 cursor-not-allowed"
-                wire:target="sendMessage, $parent"
+                wire:target="sendMessage"
+                title="{{ $selectedModel ? __('Envoyer') : __('Sélectionnez un modèle') }}"
             >
                 <span wire:loading.remove wire:target="sendMessage">
                     <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">

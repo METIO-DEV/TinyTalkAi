@@ -2,8 +2,8 @@
 
 namespace App\Livewire;
 
-use App\Services\RagService;
-use Illuminate\Support\Facades\Http;
+use App\Models\AIModel;
+use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Log;
 use Livewire\Component;
 
@@ -20,15 +20,11 @@ class ModelSelector extends Component
     public array $availableModels = [];
 
     /**
-     * Instance du service RAG
-     */
-    protected RagService $ragService;
-
-    /**
      * Écoute les événements
      */
     protected $listeners = [
         'modelSelected' => 'updateSelectedModel',
+        'refreshModels' => 'fetchAvailableModels',
     ];
 
     /**
@@ -36,57 +32,151 @@ class ModelSelector extends Component
      */
     public function mount()
     {
-        // Initialiser le service RAG
-        $this->ragService = new RagService;
+        // Charger les modèles depuis la base de données (gérés en administration)
+        $this->fetchAvailableModels();
 
         // Récupérer le modèle sélectionné depuis la session
         $this->selectedModel = session('selected_model', '');
 
-        // Récupérer la liste des modèles disponibles directement via l'API Ollama
-        $this->fetchAvailableModels();
+        // Si aucun modèle n'est sélectionné et qu'il y a des modèles disponibles, sélectionner le premier
+        if (empty($this->selectedModel) && ! empty($this->availableModels)) {
+            $this->selectedModel = $this->availableModels[0]['name'];
+            session(['selected_model' => $this->selectedModel]);
+
+            // Émettre un événement pour informer les autres composants
+            $this->dispatch('modelSelected', $this->selectedModel);
+        }
+
+        // Si un modèle est sélectionné mais qu'aucun modèle n'est disponible, réinitialiser la sélection
+        if (! empty($this->selectedModel) && empty($this->availableModels)) {
+            $this->selectedModel = '';
+            session(['selected_model' => '']);
+
+            // Émettre un événement pour informer les autres composants
+            $this->dispatch('modelSelected', $this->selectedModel);
+
+            // Notifier l'utilisateur si connecté
+            if (Auth::check()) {
+                $this->dispatch('showNotification', [
+                    'type' => 'warning',
+                    'message' => 'Vous n\'avez accès à aucun modèle. Veuillez contacter un administrateur.',
+                ]);
+            }
+        }
     }
 
     /**
-     * Récupère la liste des modèles disponibles via l'API Ollama
+     * Récupère la liste des modèles disponibles via la base de données (Filament admin)
+     * et filtre selon les groupes de l'utilisateur
      */
-    private function fetchAvailableModels()
+    public function fetchAvailableModels()
     {
         try {
-            // Utiliser RagService pour récupérer uniquement les modèles de génération
-            $models = $this->ragService->getAvailableGenerationModels();
+            $user = Auth::user();
+            $userGroups = $user ? $user->groups->pluck('id')->toArray() : [];
 
-            // Traitement des modèles pour ajouter les informations nécessaires
-            $this->availableModels = [];
+            // Si l'utilisateur est connecté mais n'a pas de groupes, retourner une liste vide
+            if ($user && empty($userGroups)) {
+                $this->availableModels = [];
 
-            // Récupération des paramètres de configuration avec valeurs par défaut
-            $ollamaHost = config('services.ollama.host', 'host.docker.internal');
-            $ollamaPort = config('services.ollama.port', '11434');
-            $ollamaUrl = 'http://'.$ollamaHost.':'.$ollamaPort.'/api/tags';
+                // Log pour débogage
+                Log::debug('Aucun modèle disponible car l\'utilisateur n\'appartient à aucun groupe', [
+                    'user_id' => $user->id,
+                ]);
 
-            // Requête HTTP pour obtenir les détails des modèles (taille, etc.)
-            $response = Http::timeout(5)->get($ollamaUrl);
+                // Revalider la sélection
+                $this->resetSelectionAfterRefresh();
 
-            if ($response->successful()) {
-                $data = $response->json();
-                $modelDetails = $data['models'] ?? [];
-
-                // Créer un tableau associatif pour un accès facile aux détails
-                $modelDetailsMap = [];
-                foreach ($modelDetails as $model) {
-                    $modelDetailsMap[$model['name']] = $model;
-                }
-
-                // Ajouter uniquement les modèles de génération avec leurs détails
-                foreach ($models as $modelName) {
-                    $details = $modelDetailsMap[$modelName] ?? [];
-                    $this->availableModels[] = [
-                        'name' => $modelName,
-                        'size' => $details['size'] ?? 0,
-                    ];
-                }
+                return;
             }
+
+            // Requête de base pour les modèles actifs
+            $query = AIModel::query()->where('is_active', true);
+
+            // Filtrer par groupes pour tous les utilisateurs (y compris les admins)
+            if ($user && ! empty($userGroups)) {
+                // Récupérer les modèles associés aux groupes de l'utilisateur
+                $query->whereHas('groups', function ($q) use ($userGroups) {
+                    $q->whereIn('groups.id', $userGroups);
+                });
+            }
+
+            $models = $query->orderBy('name')->get(['full_name', 'size']);
+
+            $embeddingModel = config('services.ollama.embedding_model', 'nomic-embed-text');
+
+            $this->availableModels = $models->filter(function ($m) use ($embeddingModel) {
+                $full = strtolower($m->full_name ?? '');
+                // Exclure le modèle d'embedding configuré et tout modèle contenant 'embed'
+                if ($full === strtolower($embeddingModel)) {
+                    return false;
+                }
+                if (str_contains($full, 'embed')) {
+                    return false;
+                }
+                // Exclure aussi la variante potentiellement mal orthographiée fournie par l'utilisateur
+                if (str_contains($full, 'bomic-embed')) {
+                    return false;
+                }
+
+                return true;
+            })->map(function ($m) {
+                return [
+                    // Le sélecteur attend 'name' comme identifiant complet utilisable par l'API Ollama
+                    'name' => $m->full_name,
+                    'size' => (int) ($m->size ?? 0),
+                ];
+            })->values()->toArray();
+
+            // Log pour débogage
+            Log::debug('Modèles disponibles pour l\'utilisateur', [
+                'user_id' => $user ? $user->id : 'non connecté',
+                'user_groups' => $userGroups,
+                'models_count' => count($this->availableModels),
+            ]);
         } catch (\Exception $e) {
-            Log::error('Erreur lors de la récupération des modèles: '.$e->getMessage());
+            Log::error('Erreur lors du chargement des modèles depuis la BD: '.$e->getMessage());
+            $this->availableModels = [];
+        }
+
+        // Revalider la sélection après rafraîchissement
+        $this->resetSelectionAfterRefresh();
+    }
+
+    /**
+     * Ajuste selectedModel pour rester cohérent avec la liste actualisée
+     */
+    private function resetSelectionAfterRefresh(): void
+    {
+        $names = array_map(fn ($m) => $m['name'], $this->availableModels);
+
+        // Si le modèle sélectionné actuel n'est plus disponible
+        if (! empty($this->selectedModel) && ! in_array($this->selectedModel, $names, true)) {
+            if (! empty($this->availableModels)) {
+                // Sélectionner le premier modèle disponible
+                $this->selectedModel = $this->availableModels[0]['name'];
+                session(['selected_model' => $this->selectedModel]);
+                $this->dispatch('modelSelected', $this->selectedModel);
+            } else {
+                // Aucune option : vider la sélection
+                $this->selectedModel = '';
+                session(['selected_model' => '']);
+                $this->dispatch('modelSelected', $this->selectedModel);
+            }
+
+            return;
+        }
+
+        // Si aucun modèle n'est sélectionné mais des modèles existent, sélectionner le premier
+        if (empty($this->selectedModel) && ! empty($this->availableModels)) {
+            $this->selectedModel = $this->availableModels[0]['name'];
+            session(['selected_model' => $this->selectedModel]);
+            $this->dispatch('modelSelected', $this->selectedModel);
+        }
+
+        // Si aucun modèle disponible, s'assurer que la session est vide
+        if (empty($this->availableModels)) {
+            session(['selected_model' => '']);
         }
     }
 
@@ -105,6 +195,9 @@ class ModelSelector extends Component
 
         // Émettre un événement pour informer les autres composants
         $this->dispatch('modelSelected', $modelName);
+
+        // Émettre un événement pour créer une nouvelle conversation
+        $this->dispatch('newConversation');
     }
 
     /**

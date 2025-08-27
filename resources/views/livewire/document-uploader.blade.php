@@ -4,7 +4,7 @@
         type="button"
         wire:click="$dispatch('openDocumentUploader')"
         class="bg-custom-white border border-custom-mid text-custom-black hover:bg-custom-mid dark:bg-custom-light-dark-mode dark:border-custom-white dark:text-custom-white hover:dark:bg-custom-mid hover:dark:text-custom-black px-3 py-2 h-full rounded-lg transition-all duration-200 flex items-center"
-        title="Ajouter un document"
+        title="{{ __('Ajouter un document') }}"
     >
         <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 13h6m-3-3v6m5 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
@@ -39,7 +39,7 @@
                 <div class="px-6 py-4">
                     <div class="flex justify-between items-center mb-4">
                         <h3 class="text-lg font-medium text-custom-black dark:text-custom-white">
-                            Ajouter un document
+                            {{ __('Ajouter un document') }}
                         </h3>
                         <button type="button" 
                                 x-on:click="closeModal()"
@@ -54,14 +54,14 @@
                         <!-- Titre du document -->
                         <div class="mb-4">
                             <label for="title" class="block text-sm font-medium text-custom-black dark:text-custom-white mb-1">
-                                Titre du document
+                                {{ __('Titre du document') }}
                             </label>
                             <input 
                                 type="text" 
                                 id="title" 
                                 wire:model="title" 
                                 class="w-full border border-custom-mid rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-custom-mid bg-custom-white text-custom-black dark:text-custom-white dark:border-custom-white dark:bg-custom-light-dark-mode"
-                                placeholder="Entrez un titre pour le document"
+                                placeholder="{{ __('Entrez un titre pour le document') }}"
                                 required
                             >
                             @error('title') 
@@ -72,7 +72,7 @@
                         <!-- Upload de fichier -->
                         <div class="mb-4">
                             <label for="document" class="block text-sm font-medium text-custom-black dark:text-custom-white mb-1">
-                                Fichier (.txt, .pdf, .docx uniquement, max 10MB)
+                                {{ __('Fichier (.txt, .pdf, .docx uniquement, max 10MB)') }}
                             </label>
                             <input 
                                 type="file" 
@@ -83,7 +83,7 @@
                                 required
                             >
                             <div wire:loading wire:target="document">
-                                <span class="text-sm text-gray-500">Chargement...</span>
+                                <span class="text-sm text-gray-500">{{ __('Chargement...') }}</span>
                             </div>
                             @error('document') 
                                 <span class="text-red-500 text-xs mt-1">{{ $message }}</span> 
@@ -106,7 +106,7 @@
                                 wire:loading.attr="disabled"
                                 wire:target="uploadDocument"
                             >
-                                Annuler
+                                {{ __('Annuler') }}
                             </button>
                             <button 
                                 type="submit" 
@@ -114,13 +114,13 @@
                                 wire:loading.attr="disabled"
                                 wire:target="uploadDocument"
                             >
-                                <span wire:loading.remove wire:target="uploadDocument">Uploader</span>
+                                <span wire:loading.remove wire:target="uploadDocument">{{ __('Télécharger') }}</span>
                                 <span wire:loading wire:target="uploadDocument">
                                     <svg class="animate-spin h-5 w-5 text-white inline" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
                                         <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
                                         <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
                                     </svg>
-                                    Traitement...
+                                    {{ __('Traitement...') }}
                                 </span>
                             </button>
                         </div>
