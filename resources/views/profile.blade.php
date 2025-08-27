@@ -20,7 +20,7 @@
 </head>
 <body class="font-sans antialiased bg-custom-light dark:bg-custom-white-dark-mode">
     <div class="min-h-screen py-12">
-        <div class="max-w-7xl mx-auto sm:px-6 lg:px-8">
+        <div class="max-w-7xl mx-auto px-2 sm:px-6 lg:px-8 xl:px-12">
             <div class="mb-6 flex items-center justify-between">
                 <h1 class="text-2xl font-bold text-custom-black dark:text-custom-white">{{ __('Profile') }}</h1>
                 <a href="{{ route('home') }}" class="inline-flex items-center px-4 py-2 bg-custom-white dark:bg-custom-mid-dark-mode dark:text-custom-white border border-custom-mid rounded-md font-semibold text-xs text-custom-black uppercase tracking-widest hover:bg-gray-100 focus:outline-none focus:ring-2 focus:ring-offset-2 transition ease-in-out duration-150">
@@ -32,19 +32,19 @@
             </div>
 
             <div class="space-y-6">
-                <div class="p-4 sm:p-8 bg-custom-white dark:bg-custom-mid-dark-mode dark:text-custom-white shadow sm:rounded-lg">
+                <div class="p-4 sm:p-8 bg-custom-white dark:bg-custom-mid-dark-mode dark:text-custom-white shadow rounded-lg">
                     <div class="max-w-xl">
                         <livewire:profile.update-profile-information-form />
                     </div>
                 </div>
 
-                <div class="p-4 sm:p-8 bg-custom-white dark:bg-custom-mid-dark-mode dark:text-custom-white shadow sm:rounded-lg">
+                <div class="p-4 sm:p-8 bg-custom-white dark:bg-custom-mid-dark-mode dark:text-custom-white shadow rounded-lg">
                     <div class="max-w-xl">
                         <livewire:profile.update-password-form />
                     </div>
                 </div>
                 
-                <div class="p-4 sm:p-8 bg-custom-white dark:bg-custom-mid-dark-mode dark:text-custom-white shadow sm:rounded-lg">
+                <div class="p-4 sm:p-8 bg-custom-white dark:bg-custom-mid-dark-mode dark:text-custom-white shadow rounded-lg">
                     <div class="max-w-xl">
                         <!-- TODO: Add logout button -->
                         <h2 class="text-lg font-medium text-custom-black dark:text-custom-white">
@@ -62,7 +62,7 @@
                     </div>
                 </div>  
 
-                <div class="p-4 sm:p-8 bg-custom-white dark:bg-custom-mid-dark-mode dark:text-custom-white shadow sm:rounded-lg">
+                <div class="p-4 sm:p-8 bg-custom-white dark:bg-custom-mid-dark-mode dark:text-custom-white shadow rounded-lg">
                     <div class="max-w-xl">
                         <livewire:profile.delete-user-form />
                     </div>
