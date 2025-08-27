@@ -1,15 +1,24 @@
 <!-- Composant pour la sidebar -->
-<div class="bg-custom-light dark:bg-custom-white-dark-mode dark:text-custom-white h-full w-full pl-6 pt-6 pb-6 flex flex-col overflow-hidden">
+<div class="bg-custom-light dark:bg-custom-white-dark-mode dark:text-custom-white h-full w-full pl-6 pt-6 pb-6 pr-6 xl:pr-0 flex flex-col overflow-hidden">
     <div class="mb-6">
         <div class="flex justify-between items-center mb-4">
             <div class="flex items-center gap-2">
-                <x-application-logo class="w-14" />
-                <h2 class="text-xl font-bold text-custom-black dark:text-custom-white">TinyTalk AI</h2>
+                <x-application-logo class="w-8 sm:w-10 md:w-10 lg:w-12" />
+                <h2 class="text-base sm:text-md lg:text-lg font-bold text-custom-black dark:text-custom-white">TinyTalk AI</h2>
             </div>
             <div class="flex items-center">
                 <div class="relative" id="profile-dropdown">
-                    <button id="profile-dropdown-button" class="inline-flex items-center px-3 py-2 border border-transparent text-sm leading-4 font-medium rounded-md text-custom-black bg-custom-white dark:bg-custom-light-dark-mode dark:text-custom-white hover:bg-custom-light-dark-mode dark:hover:bg-custom-mid-dark-mode focus:outline-none transition ease-in-out duration-150">
-                        <span>{{ auth()->user()->name }}</span>
+                    <button id="profile-dropdown-button" class="inline-flex items-center px-2 py-2 border border-transparent text-sm leading-4 font-medium rounded-md text-custom-black bg-custom-white dark:bg-custom-light-dark-mode dark:text-custom-white hover:bg-custom-light-dark-mode dark:hover:bg-custom-mid-dark-mode focus:outline-none transition ease-in-out duration-150">
+                        <!-- Icône visible en dessous de ~1536px (2xl) -->
+                        <span class="inline-flex 2xl:hidden items-center justify-center text-custom-black dark:text-custom-white" aria-hidden="true">
+                            <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5.121 17.804A7 7 0 0118.879 17.804M15 11a3 3 0 11-6 0 3 3 0 016 0z" />
+                            </svg>
+                        </span>
+
+                        <!-- Nom visible seulement à partir de ~1536px (2xl) -->
+                        <span class="hidden 2xl:block lg:max-w-[80px] md:max-w-[80px] sm:max-w-[60px] truncate" title="{{ auth()->user()->name }}">{{ auth()->user()->name }}</span>
+
                         <div class="ms-1">
                             <svg class="fill-current h-4 w-4" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20">
                                 <path fill-rule="evenodd" d="M5.293 7.293a1 1 0 011.414 0L10 10.586l3.293-3.293a1 1 0 111.414 1.414l-4 4a1 1 0 01-1.414 0l-4-4a1 1 0 010-1.414z" clip-rule="evenodd" />

@@ -1,6 +1,6 @@
 <div id="chat-messages" class="flex-1 overflow-y-auto space-y-4 p-6 dark:text-custom-white ">
     @if($selectedModel)
-        <div id="model-selection-message" class="p-4 my-4 text-center">
+        <div id="model-selection-message" class="xl:p-4 p-0 xl:my-4 my-0 text-center">
             <p class="text-custom-black dark:text-custom-white font-bold text-lg mt-1">{{ $selectedModel }}</p>
         </div>
     @endif

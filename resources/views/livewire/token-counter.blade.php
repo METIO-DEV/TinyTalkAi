@@ -1,12 +1,19 @@
-<div class="token-counter w-[60%]">
+<div class="token-counter xl:w-[80%] lg:w-[60%] w-full">
     @if($selectedModel)
         <div class="flex flex-col">
-            <div class="flex flex-row justify-center gap-8 items-center text-xs text-custom-black dark:text-custom-white">
-                <span>{{ $tokensUsed }} / {{ $tokenLimit ?? '?' }} tokens</span>
-                <div class="w-[60%] bg-custom-mid rounded-full h-4 dark:bg-gray-700 flex items-center overflow-hidden">
+            <div class="flex flex-row justify-center xl:gap-8 lg:gap-4 gap-2 items-center text-xs text-custom-black dark:text-custom-white">
+                <span class="hidden lg:inline">{{ $tokensUsed }} / {{ $tokenLimit ?? '?' }} tokens</span>
+                <div class="relative xl:w-[60%] lg:w-[50%] w-full bg-custom-mid rounded-full h-4 dark:bg-gray-700 overflow-hidden">
                     <div class="h-4 rounded-full transition-all duration-300 ease-in-out" 
                          style="width: {{ $this->getTokenPercentageProperty() }}%; background-color: {{ $this->getProgressColorProperty() }}"></div>
-                    <span class="text-xs relative right-8 text-custom-black dark:text-custom-white">{{ $this->getTokenPercentageProperty() }}%</span>
+                    <!-- Mobile: show token info inside the bar -->
+                    <span class="absolute inset-0 flex items-center justify-center text-[10px] text-custom-black dark:text-custom-white lg:hidden">
+                        {{ $tokensUsed }} / {{ $tokenLimit ?? '?' }}
+                    </span>
+                    <!-- Desktop: show percentage on the right inside the bar -->
+                    <span class="absolute right-2 top-1/2 -translate-y-1/2 text-[10px] text-custom-black dark:text-custom-white hidden lg:inline">
+                        {{ $this->getTokenPercentageProperty() }}%
+                    </span>
                 </div>
                 <button 
                     wire:click="summarizeConversation" 

@@ -10,7 +10,6 @@ use Filament\Actions;
 use Filament\Notifications\Notification;
 use Filament\Resources\Pages\EditRecord;
 use Illuminate\Support\Facades\Log;
-use Illuminate\Support\Facades\Lang;
 
 class EditCollection extends EditRecord
 {
