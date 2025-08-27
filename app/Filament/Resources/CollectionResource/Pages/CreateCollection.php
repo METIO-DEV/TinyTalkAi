@@ -28,8 +28,8 @@ class CreateCollection extends CreateRecord
             ]);
 
             Notification::make()
-                ->title('Collection créée')
-                ->body('La collection a été créée avec succès dans Qdrant.')
+                ->title(__('Collection created'))
+                ->body(__('The collection was successfully created in Qdrant.'))
                 ->success()
                 ->send();
         } else {
@@ -38,8 +38,8 @@ class CreateCollection extends CreateRecord
             ]);
 
             Notification::make()
-                ->title('Attention')
-                ->body('La collection a été créée en base de données mais pas dans Qdrant. Veuillez vérifier la connexion à Qdrant.')
+                ->title(__('Warning'))
+                ->body(__('The collection was created in the database but not in Qdrant. Please check the Qdrant connection.'))
                 ->warning()
                 ->send();
         }

@@ -303,7 +303,7 @@ class DocumentUploader extends Component
                     Log::info('DocumentUploader: aucune conversation sélectionnée, document non associé');
                 }
 
-                $this->statusMessage = 'Document traité avec succès !';
+                $this->statusMessage = __('Document traité avec succès !');
                 $this->success = true;
                 $this->reset(['document', 'title']);
 
@@ -314,14 +314,14 @@ class DocumentUploader extends Component
                 $this->dispatch('closeModalAfterDelay');
             } else {
                 Log::error('DocumentUploader: échec du traitement du document');
-                $this->statusMessage = 'Erreur lors du traitement du document.';
+                $this->statusMessage = __('Erreur lors du traitement du document.');
             }
         } catch (\Exception $e) {
             Log::error('DocumentUploader: erreur lors du traitement du document: '.$e->getMessage(), [
                 'exception' => get_class($e),
                 'trace' => $e->getTraceAsString(),
             ]);
-            $this->statusMessage = 'Une erreur est survenue: '.$e->getMessage();
+            $this->statusMessage = __('Une erreur est survenue: ').$e->getMessage();
         } finally {
             $this->isProcessing = false;
         }

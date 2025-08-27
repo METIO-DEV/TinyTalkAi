@@ -40,6 +40,17 @@ Route::post('/logout', function () {
     return redirect('/');
 })->middleware('auth')->name('logout');
 
+// Route pour changer la langue (fr/en)
+Route::post('/locale', function () {
+    $locale = request('locale');
+    if (! in_array($locale, ['en', 'fr'], true)) {
+        $locale = config('app.locale');
+    }
+    session()->put('locale', $locale);
+
+    return back();
+})->name('locale.set');
+
 // Redirection des anciennes routes vers la page d'accueil
 Route::redirect('dashboard', '/')->name('dashboard');
 Route::redirect('chat', '/');

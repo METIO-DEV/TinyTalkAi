@@ -132,7 +132,12 @@ class AIModelResource extends Resource
 
                         Notification::make()
                             ->title(__('Sync completed'))
-                            ->body("Créés: {$stats['created']} — Mis à jour: {$stats['updated']} — Désactivés: {$stats['deactivated']} — Ignorés: {$stats['skipped']}")
+                            ->body(__('Sync stats', [
+                                'created' => $stats['created'],
+                                'updated' => $stats['updated'],
+                                'deactivated' => $stats['deactivated'],
+                                'skipped' => $stats['skipped'],
+                            ]))
                             ->success()
                             ->send();
                     }),

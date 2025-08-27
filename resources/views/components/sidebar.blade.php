@@ -19,23 +19,34 @@
 
                     <div id="profile-dropdown-menu" class="hidden absolute z-50 mt-2 w-48 rounded-md shadow-lg origin-top-right right-0">
                         <div class="rounded-md ring-1 ring-black ring-opacity-5 bg-custom-white dark:bg-custom-light-dark-mode">
-                            <a href="{{ route('profile') }}" class="flex justify-center items-center px-4 py-2 text-sm text-custom-black dark:text-custom-white rounded-md hover:bg-custom-mid-dark-mode dark:hover:bg-custom-mid-dark-mode">
-                                {{ __('Profile') }}
-                            </a>
-                            @role('admin|super-admin')
-                            <a href="{{ url('/admin') }}" class="flex justify-center items-center px-4 py-2 text-sm text-custom-black dark:text-custom-white rounded-md hover:bg-custom-mid-dark-mode dark:hover:bg-custom-mid-dark-mode">
-                                {{ __('Administration') }}
-                            </a>
-                            @endrole
-                            <livewire:logout /> <!-- Utilisation du composant "logout" Livewire -->
-
-                            <!-- Utilisation de la méthode classique, avec un formulaire et une route qui effectue la déconnexion -->
-                            <!-- <form method="POST" action="{{ route('logout') }}" id="logout-form">
+                            @php
+                                $currentLocale = app()->getLocale();
+                                $nextLocale = $currentLocale === 'fr' ? 'en' : 'fr';
+                            @endphp
+                            <form method="POST" action="{{ route('locale.set') }}">
                                 @csrf
-                                <x-danger-button type="button" id="logout-button" class="w-full flex justify-center items-center px-4 py-2 text-sm text-custom-black dark:text-custom-white rounded-md">
-                                    {{ __('Log Out') }}
-                                </x-danger-button>  
-                            </form> -->
+                                <input type="hidden" name="locale" value="{{ $nextLocale }}">
+                                <button type="submit" class="w-full flex justify-center items-center px-4 py-2 text-sm text-custom-black dark:text-custom-white rounded-md hover:bg-custom-mid-dark-mode dark:hover:bg-custom-mid-dark-mode">
+                                    {{ strtoupper($currentLocale) }} / {{ strtoupper($nextLocale) }}
+                                </button>
+                            </form>
+                             <a href="{{ route('profile') }}" class="flex justify-center items-center px-4 py-2 text-sm text-custom-black dark:text-custom-white rounded-md hover:bg-custom-mid-dark-mode dark:hover:bg-custom-mid-dark-mode">
+                                 {{ __('Profile') }}
+                             </a>
+                             @role('admin|super-admin')
+                             <a href="{{ url('/admin') }}" class="flex justify-center items-center px-4 py-2 text-sm text-custom-black dark:text-custom-white rounded-md hover:bg-custom-mid-dark-mode dark:hover:bg-custom-mid-dark-mode">
+                                 {{ __('Administration') }}
+                             </a>
+                             @endrole
+                             <livewire:logout /> <!-- Utilisation du composant "logout" Livewire -->
+
+                             <!-- Utilisation de la méthode classique, avec un formulaire et une route qui effectue la déconnexion -->
+                             <!-- <form method="POST" action="{{ route('logout') }}" id="logout-form">
+                                 @csrf
+                                 <x-danger-button type="button" id="logout-button" class="w-full flex justify-center items-center px-4 py-2 text-sm text-custom-black dark:text-custom-white rounded-md">
+                                     {{ __('Log Out') }}
+                                 </x-danger-button>  
+                             </form> -->
                         </div>
                     </div>
                 </div>

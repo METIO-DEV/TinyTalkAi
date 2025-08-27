@@ -28,7 +28,7 @@ class UserResource extends Resource
     {
         return $form
             ->schema([
-                Forms\Components\Section::make('Informations utilisateur')
+                Forms\Components\Section::make(__('Informations utilisateur'))
                     ->schema([
                         Forms\Components\TextInput::make('name')
                             ->label(__('Name'))
@@ -49,7 +49,7 @@ class UserResource extends Resource
                             ->required(fn (string $operation): bool => $operation === 'create')
                             ->hidden(fn (string $operation): bool => $operation === 'edit'),
                     ])->columns(2),
-                Forms\Components\Section::make('Roles and groups')
+                Forms\Components\Section::make(__('Roles and groups'))
                     ->schema([
                         Forms\Components\Select::make('roles')
                             ->label(__('Roles'))
@@ -70,7 +70,7 @@ class UserResource extends Resource
                                 $record->syncGroups($state ? array_values((array) $state) : []);
                             }),
                     ])->columns(2),
-                Forms\Components\Section::make(__(' Owned collections'))
+                Forms\Components\Section::make(__('Owned collections'))
                     ->schema([
                         Forms\Components\Placeholder::make('owned_collections_list')
                             ->label(__('Owned collections'))

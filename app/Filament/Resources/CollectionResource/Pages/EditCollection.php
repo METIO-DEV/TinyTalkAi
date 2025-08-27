@@ -10,6 +10,7 @@ use Filament\Actions;
 use Filament\Notifications\Notification;
 use Filament\Resources\Pages\EditRecord;
 use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Facades\Lang;
 
 class EditCollection extends EditRecord
 {
@@ -33,8 +34,8 @@ class EditCollection extends EditRecord
                         ]);
 
                         Notification::make()
-                            ->title('Collection supprimée')
-                            ->body('La collection a été supprimée avec succès dans Qdrant.')
+                            ->title(__('Collection deleted'))
+                            ->body(__('The collection was successfully deleted in Qdrant.'))
                             ->success()
                             ->send();
                     } else {
@@ -43,8 +44,8 @@ class EditCollection extends EditRecord
                         ]);
 
                         Notification::make()
-                            ->title('Attention')
-                            ->body('La collection a été supprimée en base de données mais pas dans Qdrant.')
+                            ->title(__('Warning'))
+                            ->body(__('The collection was deleted in the database but not in Qdrant.'))
                             ->warning()
                             ->send();
                     }
@@ -79,8 +80,8 @@ class EditCollection extends EditRecord
                 ]);
 
                 Notification::make()
-                    ->title('Collection renommée')
-                    ->body('La collection a été renommée avec succès dans Qdrant.')
+                    ->title(__('Collection renamed'))
+                    ->body(__('The collection was successfully renamed in Qdrant.'))
                     ->success()
                     ->send();
             } else {
@@ -92,8 +93,8 @@ class EditCollection extends EditRecord
                 ]);
 
                 Notification::make()
-                    ->title('Attention')
-                    ->body('La collection a été renommée en base de données mais pas dans Qdrant.')
+                    ->title(__('Warning'))
+                    ->body(__('The collection was renamed in the database but not in Qdrant.'))
                     ->warning()
                     ->send();
             }

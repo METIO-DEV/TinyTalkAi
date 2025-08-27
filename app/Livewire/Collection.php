@@ -115,10 +115,10 @@ class Collection extends Component
     protected function messages()
     {
         return [
-            'collectionName.required' => 'Le nom de la collection est requis.',
-            'collectionName.min' => 'Le nom de la collection doit contenir au moins 3 caractères.',
-            'collectionName.max' => 'Le nom de la collection ne doit pas dépasser 50 caractères.',
-            'collectionName.regex' => 'Le nom de la collection ne doit contenir que des lettres minuscules, des chiffres et des underscores.',
+            'collectionName.required' => __('The collection name is required.'),
+            'collectionName.min' => __('The collection name must be at least 3 characters.'),
+            'collectionName.max' => __('The collection name may not be greater than 50 characters.'),
+            'collectionName.regex' => __('The collection name may only contain lowercase letters, numbers, and underscores.'),
         ];
     }
 
@@ -222,7 +222,7 @@ class Collection extends Component
                 'exception' => get_class($e),
                 'trace' => $e->getTraceAsString(),
             ]);
-            $this->statusMessage = 'Erreur lors du chargement des collections: '.$e->getMessage();
+            $this->statusMessage = __('An error occurred: :message', ['message' => $e->getMessage()]);
             $this->isProcessing = false;
         }
     }
@@ -278,7 +278,7 @@ class Collection extends Component
             $this->validate();
 
             $this->isProcessing = true;
-            $this->statusMessage = 'Création de la collection en cours...';
+            $this->statusMessage = __('Creating collection...');
             $this->success = false;
 
             // Création de la collection dans Qdrant
@@ -299,7 +299,7 @@ class Collection extends Component
                     'collectionName' => $this->collectionName,
                 ]);
 
-                $this->statusMessage = 'Collection créée avec succès !';
+                $this->statusMessage = __('Collection created successfully!');
                 $this->success = true;
                 $this->loadCollections();
                 $this->selectedCollection = $this->collectionName;
@@ -308,14 +308,14 @@ class Collection extends Component
                 $this->dispatch('closeModalAfterDelay');
             } else {
                 Log::error('Collection: échec de la création de la collection');
-                $this->statusMessage = 'Erreur lors de la création de la collection.';
+                $this->statusMessage = __('Error while creating the collection.');
             }
         } catch (\Exception $e) {
             Log::error('Collection: erreur lors de la création de la collection: '.$e->getMessage(), [
                 'exception' => get_class($e),
                 'trace' => $e->getTraceAsString(),
             ]);
-            $this->statusMessage = 'Une erreur est survenue: '.$e->getMessage();
+            $this->statusMessage = __('An error occurred: :message', ['message' => $e->getMessage()]);
         } finally {
             $this->isProcessing = false;
         }
@@ -360,7 +360,7 @@ class Collection extends Component
                     'collectionName' => $collectionName,
                 ]);
 
-                $this->statusMessage = 'Collection supprimée avec succès !';
+                $this->statusMessage = __('Collection deleted successfully!');
                 $this->success = true;
 
                 // Si la collection supprimée était sélectionnée, réinitialiser la sélection
@@ -371,14 +371,14 @@ class Collection extends Component
                 $this->loadCollections();
             } else {
                 Log::error('Collection: échec de la suppression de la collection');
-                $this->statusMessage = 'Erreur lors de la suppression de la collection.';
+                $this->statusMessage = __('Error while deleting the collection.');
             }
         } catch (\Exception $e) {
             Log::error('Collection: erreur lors de la suppression de la collection: '.$e->getMessage(), [
                 'exception' => get_class($e),
                 'trace' => $e->getTraceAsString(),
             ]);
-            $this->statusMessage = 'Une erreur est survenue: '.$e->getMessage();
+            $this->statusMessage = __('An error occurred: :message', ['message' => $e->getMessage()]);
         } finally {
             $this->isProcessing = false;
         }
@@ -442,12 +442,12 @@ class Collection extends Component
     protected function documentMessages()
     {
         return [
-            'document.required' => 'Veuillez sélectionner un fichier.',
-            'document.file' => 'Le fichier est invalide.',
-            'document.mimes' => 'Seuls les fichiers .txt, .pdf et .docx sont acceptés.',
-            'document.max' => 'La taille du fichier ne doit pas dépasser 10MB.',
-            'documentTitle.required' => 'Le titre du document est requis.',
-            'documentTitle.max' => 'Le titre ne doit pas dépasser 255 caractères.',
+            'document.required' => __('Please select a file.'),
+            'document.file' => __('The file is invalid.'),
+            'document.mimes' => __('Only .txt, .pdf and .docx files are allowed.'),
+            'document.max' => __('The file size may not be greater than 10MB.'),
+            'documentTitle.required' => __('The document title is required.'),
+            'documentTitle.max' => __('The title may not be greater than 255 characters.'),
         ];
     }
 
@@ -460,7 +460,7 @@ class Collection extends Component
             $this->validate($this->documentRules(), $this->documentMessages());
 
             $this->isProcessing = true;
-            $this->statusMessage = 'Traitement en cours...';
+            $this->statusMessage = __('Processing...');
             $this->success = false;
 
             // Générer un ID unique pour le document
@@ -514,7 +514,7 @@ class Collection extends Component
 
             if ($success) {
                 Log::info('Collection: document traité avec succès');
-                $this->statusMessage = 'Document traité avec succès !';
+                $this->statusMessage = __('Document processed successfully!');
                 $this->success = true;
                 $this->reset(['document', 'documentTitle']);
 
@@ -522,14 +522,14 @@ class Collection extends Component
                 $this->dispatch('closeUploadModalAfterDelay');
             } else {
                 Log::error('Collection: échec du traitement du document');
-                $this->statusMessage = 'Erreur lors du traitement du document.';
+                $this->statusMessage = __('Error while processing the document.');
             }
         } catch (\Exception $e) {
             Log::error('Collection: erreur lors du traitement du document: '.$e->getMessage(), [
                 'exception' => get_class($e),
                 'trace' => $e->getTraceAsString(),
             ]);
-            $this->statusMessage = 'Une erreur est survenue: '.$e->getMessage();
+            $this->statusMessage = __('An error occurred: :message', ['message' => $e->getMessage()]);
         } finally {
             $this->isProcessing = false;
         }
