@@ -1,5 +1,13 @@
 <!-- Composant pour l'interface de chat -->
-<div class="flex flex-col h-full bg-custom-white dark:bg-custom-light-dark-mode dark:text-custom-white rounded-lg shadow-xl">
+<div class="relative flex flex-col h-full bg-custom-white dark:bg-custom-light-dark-mode dark:text-custom-white xl:rounded-lg xl:shadow-xl rounded-none shadow-none">
+    <!-- Bouton flottant (mobile) pour ouvrir la sidebar -->
+    <button
+        id="open-sidebar-floating"
+        type="button"
+        class="xl:hidden absolute top-4 left-4 z-10 inline-flex items-center gap-2 p-2 rounded-md border border-custom-mid bg-custom-white text-custom-black shadow-md dark:bg-custom-light-dark-mode dark:text-custom-white"
+        aria-label="{{ __('Menu') }}">
+        <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" viewBox="0 0 20 20" fill="currentColor"><path d="M3 5h14a1 1 0 100-2H3a1 1 0 000 2zm14 4H3a1 1 0 100 2h14a1 1 0 100-2zm0 6H3a1 1 0 100 2h14a1 1 0 100-2z"/></svg>
+    </button>
     <!-- Zone des messages -->
     @livewire('chat-messages')
     
@@ -10,7 +18,10 @@
         <!-- Compteur de tokens -->
         <div class="mt-2 flex flex-row justify-around items-center">
             <livewire:token-counter />
-            <livewire:rag-toggle />
+            <div class="lg:flex hidden">
+                <livewire:rag-toggle />
+            </div>
+            
         </div>
     </div>
 </div>
