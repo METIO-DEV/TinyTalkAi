@@ -5,7 +5,7 @@
         </div>
     @endif
     
-    @forelse($messages as $message)
+    @forelse($parsedMessages as $message)
         @if($message['role'] === 'user')
             <div class="flex justify-end mb-4" wire:key="msg-user-{{ $loop->index }}-{{ substr(md5(($message['content'] ?? '') . $loop->index), 0, 8) }}">
                 <div class="bg-custom-black text-white dark:text-custom-white dark:bg-custom-white-dark-mode rounded-tl-xl rounded-tr-xl rounded-bl-xl rounded-br-sm py-2 px-4 max-w-[80%]">
@@ -15,7 +15,24 @@
         @elseif($message['role'] === 'assistant')
             <div class="flex justify-start mb-4 animate-fade-in" wire:key="msg-assistant-{{ $loop->index }}-{{ substr(md5(($message['content'] ?? '') . $loop->index), 0, 8) }}">
                 <div class="bg-custom-light text-custom-black rounded-lg py-2 px-4 max-w-[80%] rounded-tl-xl rounded-tr-xl rounded-bl-sm rounded-br-xl">
-                    <div class="whitespace-pre-wrap">{{ $message['content'] }}</div>
+                    @php($segments = $message['segments'] ?? [[ 'type' => 'text', 'content' => $message['content'] ?? '' ]])
+                    @foreach($segments as $seg)
+                        @if(($seg['type'] ?? 'text') === 'think')
+                            <details class="my-2 group">
+                                <summary class="cursor-pointer select-none text-sm text-gray-600 flex items-center gap-2">
+                                    <svg class="w-4 h-4 transition-transform duration-200 group-open:rotate-90" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7" />
+                                    </svg>
+                                    <span>{{ __('Processus de réflexion') }}</span>
+                                </summary>
+                                <div class="border border-custom-mid  text-custom-black rounded p-1 whitespace-pre-wrap text-xs">
+                                    {{ $seg['content'] }}
+                                </div>
+                            </details>
+                        @else
+                            <div class="whitespace-pre-wrap">{{ $seg['content'] }}</div>
+                        @endif
+                    @endforeach
                 </div>
             </div>
         @elseif($message['role'] === 'error')
