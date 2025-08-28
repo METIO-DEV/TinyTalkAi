@@ -6,6 +6,7 @@ use App\Models\Conversation;
 use App\Models\Message;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Log;
+use Livewire\Attributes\On;
 use Livewire\Component;
 
 class ChatMessages extends Component
@@ -34,6 +35,8 @@ class ChatMessages extends Component
         'conversationCleared' => 'clearConversation',
         'messageAdded' => 'addMessage',
         'conversationLoaded' => 'handleConversationLoaded',
+        'conversationUpdated' => 'syncConversationId',
+        'refreshMessages' => 'refreshMessages',
     ];
 
     /**
@@ -111,9 +114,78 @@ class ChatMessages extends Component
     /**
      * Ajoute un message à la liste des messages
      */
+    #[On('messageAdded')]
     public function addMessage(array $message)
     {
+        Log::info('ChatMessages: Ajout d\'un message', [
+            'role' => $message['role'] ?? 'unknown',
+            'content_length' => strlen($message['content'] ?? ''),
+            'messages_count_before' => count($this->messages),
+            'conversation_id' => $this->conversationId,
+        ]);
+
         $this->messages[] = $message;
+
+        Log::info('ChatMessages: Message ajouté', [
+            'messages_count_after' => count($this->messages),
+            'last_message_role' => end($this->messages)['role'] ?? 'unknown',
+        ]);
+
+        // Si on a une conversation active, recharger les messages depuis la BD
+        if ($this->conversationId && Auth::check()) {
+            $this->refreshMessagesFromDatabase();
+        }
+    }
+
+    /**
+     * Recharge les messages depuis la base de données
+     */
+    private function refreshMessagesFromDatabase()
+    {
+        try {
+            $conversation = Conversation::where('id', $this->conversationId)
+                ->where('user_id', Auth::id())
+                ->first();
+
+            if ($conversation) {
+                $dbMessages = $conversation->messages()
+                    ->orderBy('created_at')
+                    ->get()
+                    ->map(function ($message) {
+                        return [
+                            'role' => $message->role,
+                            'content' => $message->content,
+                        ];
+                    })
+                    ->toArray();
+
+                Log::info('ChatMessages: Messages rechargés depuis la BD', [
+                    'db_messages_count' => count($dbMessages),
+                    'current_messages_count' => count($this->messages),
+                ]);
+
+                // Remplacer les messages actuels par ceux de la BD
+                $this->messages = $dbMessages;
+            }
+        } catch (\Exception $e) {
+            Log::error('ChatMessages: Erreur lors du rechargement des messages: '.$e->getMessage());
+        }
+    }
+
+    /**
+     * Recharge les messages depuis la base de données (appelée périodiquement)
+     */
+    #[On('refreshMessages')]
+    public function refreshMessages()
+    {
+        if ($this->conversationId && Auth::check()) {
+            Log::info('ChatMessages: Rechargement périodique des messages', [
+                'conversation_id' => $this->conversationId,
+                'current_count' => count($this->messages),
+            ]);
+
+            $this->refreshMessagesFromDatabase();
+        }
     }
 
     /**
@@ -122,6 +194,21 @@ class ChatMessages extends Component
     public function handleConversationLoaded(array $messages)
     {
         $this->messages = $messages;
+    }
+
+    /**
+     * Synchronise l'ID de conversation depuis ChatForm
+     */
+    public function syncConversationId()
+    {
+        $sessionConversationId = session('selected_conversation_id');
+        if ($sessionConversationId && $sessionConversationId !== $this->conversationId) {
+            Log::info('ChatMessages: Synchronisation du conversationId', [
+                'old_id' => $this->conversationId,
+                'new_id' => $sessionConversationId,
+            ]);
+            $this->conversationId = $sessionConversationId;
+        }
     }
 
     public function render()

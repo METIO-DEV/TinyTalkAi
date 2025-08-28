@@ -75,6 +75,10 @@
                 </svg>
             </button>
         </form>
+        <div class="h-full lg:flex hidden">
+            @livewire('document-uploader')
+        </div>
+            
         <!-- Options (mobile) discrètes : icône seule, menu qui s'ouvre vers le haut -->
         <div class="lg:hidden relative" x-data="{ open: false }" @click.outside="open = false">
             <button

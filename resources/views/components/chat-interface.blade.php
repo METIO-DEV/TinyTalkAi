@@ -102,7 +102,7 @@
 
 <script>
 
-// Auto‑scroll « toujours en bas » même après changement de conversation
+// Auto‑scroll « toujours en bas » même après changement de conversation
 // --------------------------------------------------------------------
 
 (() => {
@@ -131,4 +131,332 @@
     // Après chaque diff Livewire
     document.addEventListener('livewire:update', initScroll);
 })();
+
+// Gestion du streaming avec Server-Sent Events
+// ------------------------------------------------------------
+
+let currentEventSource = null;
+let currentAIMessage = null;
+let isUserScrolling = false;
+
+// Fonction pour détecter si l'utilisateur scrolle manuellement
+function setupScrollDetection() {
+    const container = document.getElementById('chat-messages');
+    if (!container) return;
+
+    let scrollTimeout;
+    container.addEventListener('scroll', () => {
+        isUserScrolling = true;
+        clearTimeout(scrollTimeout);
+        scrollTimeout = setTimeout(() => {
+            isUserScrolling = false;
+        }, 1000);
+    });
+}
+
+// Fonction pour faire défiler vers le bas seulement si l'utilisateur ne scrolle pas
+function smartScrollToBottom() {
+    if (!isUserScrolling) {
+        const container = document.getElementById('chat-messages');
+        if (container) {
+            container.scrollTop = container.scrollHeight;
+        }
+    }
+}
+
+// Fonction pour créer un nouveau message AI dans l'interface
+function createAIMessage() {
+    const template = document.getElementById('ai-message-template');
+    if (!template) return null;
+
+    const messageElement = template.content.cloneNode(true);
+    const container = document.getElementById('chat-messages');
+    if (!container) return null;
+
+    container.appendChild(messageElement);
+    
+    // Retourner l'élément de contenu pour pouvoir y ajouter du texte
+    const messages = container.querySelectorAll('.message-content');
+    return messages[messages.length - 1];
+}
+
+// Fonction pour ajouter un message de chargement
+function showLoadingMessage() {
+    const template = document.getElementById('loading-message-template');
+    if (!template) return null;
+
+    const loadingElement = template.content.cloneNode(true);
+    const container = document.getElementById('chat-messages');
+    if (!container) return null;
+
+    container.appendChild(loadingElement);
+    smartScrollToBottom();
+    
+    return container.querySelector('.loading-message');
+}
+
+// Fonction pour supprimer le message de chargement
+function hideLoadingMessage() {
+    const loadingMessage = document.querySelector('.loading-message');
+    if (loadingMessage) {
+        loadingMessage.remove();
+    }
+}
+
+// Fonction pour gérer le streaming
+function handleStreaming(data) {
+    // Afficher le message de chargement
+    showLoadingMessage();
+
+    // Préparer les données pour l'envoi
+    const streamData = {
+        model: data.model,
+        messages: data.messages,
+        conversationId: data.conversationId,
+        ragEnabled: data.ragEnabled,
+        selectedCollection: data.selectedCollection,
+        temperature: data.temperature,
+        maxTokens: data.maxTokens
+    };
+
+    // Démarrer le polling périodique des messages
+    let pollingInterval;
+    const startPolling = () => {
+        pollingInterval = setInterval(() => {
+            if (window.Livewire) {
+                window.Livewire.dispatch('refreshMessages');
+            }
+        }, 2000); // Polling toutes les secondes
+    };
+
+    const stopPolling = () => {
+        if (pollingInterval) {
+            clearInterval(pollingInterval);
+            pollingInterval = null;
+        }
+    };
+
+    fetch('/api/chat/stream', {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+            'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]').getAttribute('content')
+        },
+        body: JSON.stringify(streamData)
+    })
+    .then(response => {
+        if (!response.ok) {
+            throw new Error(`HTTP error! status: ${response.status}`);
+        }
+
+        // Supprimer le message de chargement et créer le message AI
+        hideLoadingMessage();
+        currentAIMessage = createAIMessage();
+        
+        if (!currentAIMessage) {
+            throw new Error('Impossible de créer le message AI');
+        }
+        
+        // Démarrer le polling
+        startPolling();
+
+        // Lire le stream
+        const reader = response.body.getReader();
+        const decoder = new TextDecoder();
+        let buffer = '';
+
+        function readStream() {
+            return reader.read().then(({ done, value }) => {
+                if (done) {
+                    // Arrêter le polling et faire un dernier refresh
+                    stopPolling();
+                    setTimeout(() => {
+                        if (window.Livewire) {
+                            window.Livewire.dispatch('refreshMessages');
+                        }
+                        // Nettoyer le message temporaire
+                        if (currentAIMessage) {
+                            const wrapper = currentAIMessage.closest('.flex');
+                            if (wrapper) {
+                                wrapper.remove();
+                            }
+                        }
+                        currentAIMessage = null;
+                        hideLoadingMessage();
+                    }, 500);
+                    
+                    return;
+                }
+
+                buffer += decoder.decode(value, { stream: true });
+                const lines = buffer.split('\n');
+                buffer = lines.pop() || ''; // Garder la ligne incomplète
+
+                lines.forEach(line => {
+                    line = line.trim();
+                    if (line.startsWith('data: ')) {
+                        try {
+                            const data = JSON.parse(line.substring(6));
+                            handleSSEEvent(data);
+                        } catch (e) {
+                            console.error('Erreur parsing JSON:', e, line);
+                        }
+                    }
+                });
+
+                return readStream();
+            });
+        }
+
+        return readStream();
+    })
+    .catch(error => {
+        console.error('Erreur lors du streaming:', error);
+        stopPolling();
+        hideLoadingMessage();
+        
+        // Afficher un message d'erreur
+        if (window.Livewire) {
+            window.Livewire.dispatch('messageAdded', {
+                role: 'error',
+                content: 'Erreur lors du streaming: ' + error.message
+            });
+        }
+    });
+}
+
+// Fonction pour traiter les événements SSE
+function handleSSEEvent(data) {
+    switch (data.event || 'chunk') {
+        case 'chunk':
+            if (data.content) {
+                // Si le noeud temporaire a été perdu (re-render Livewire), le recréer
+                if (!currentAIMessage) {
+                    currentAIMessage = createAIMessage();
+                }
+                if (currentAIMessage) {
+                    currentAIMessage.textContent += data.content;
+                    smartScrollToBottom();
+                } else {
+                    console.warn('chunk reçu mais currentAIMessage est introuvable — message non affiché');
+                }
+            }
+            break;
+
+        case 'complete':
+            // Injecter immédiatement le message final dans l'état Livewire
+            try {
+                const finalText = (typeof data.response === 'string' && data.response.length)
+                    ? data.response
+                    : (currentAIMessage?.textContent || '');
+                if (finalText && window.Livewire) {
+                    window.Livewire.dispatch('messageAdded', {
+                        role: 'assistant',
+                        content: finalText,
+                    });
+                    
+                    // Attendre un court délai pour que Livewire traite le message
+                    setTimeout(() => {
+                        // Nettoyer le message temporaire après que Livewire ait eu le temps de se re-render
+                        if (currentAIMessage) {
+                            const wrapper = currentAIMessage.closest('.flex');
+                            if (wrapper) {
+                                wrapper.remove();
+                            }
+                        }
+                        currentAIMessage = null;
+                        hideLoadingMessage();
+                    }, 100);
+                }
+            } catch (e) {
+                console.warn('Impossible d\'injecter le message final dans Livewire:', e);
+            }
+            
+            // Notifier Livewire pour la persistance (tokens, etc.)
+            if (window.Livewire && data.conversationId) {
+                window.Livewire.dispatch('saveAssistantMessage', {
+                    conversationId: data.conversationId,
+                    content: data.response,
+                    tokens: data.tokens || 0
+                });
+            }
+            
+            break;
+
+        case 'error':
+            console.error('Erreur SSE:', data.message);
+            hideLoadingMessage();
+            
+            if (window.Livewire) {
+                window.Livewire.dispatch('messageAdded', {
+                    role: 'error',
+                    content: data.message
+                });
+            }
+            
+            currentAIMessage = null;
+            break;
+
+        case 'close':
+            console.log('Connexion SSE fermée');
+            currentAIMessage = null;
+            break;
+    }
+}
+
+// Écouter l'événement de démarrage du streaming depuis Livewire
+document.addEventListener('livewire:initialized', () => {
+    setupScrollDetection();
+    
+    // Écouter l'événement startStreaming
+    Livewire.on('startStreaming', (event) => {
+        const data = Array.isArray(event) ? event[0] : event;
+        handleStreaming(data);
+    });
+    
+    // Écouter l'événement messageAdded pour afficher les messages utilisateur
+    Livewire.on('messageAdded', (event) => {
+        const data = Array.isArray(event) ? event[0] : event;
+        
+        if (data.role === 'user') {
+            // Créer un nouveau message utilisateur
+            const template = document.getElementById('user-message-template');
+            if (template) {
+                const messageElement = template.content.cloneNode(true);
+                const contentElement = messageElement.querySelector('.message-content');
+                if (contentElement) {
+                    contentElement.textContent = data.content;
+                }
+                
+                const container = document.getElementById('chat-messages');
+                if (container) {
+                    container.appendChild(messageElement);
+                    smartScrollToBottom();
+                }
+            }
+        } else if (data.role === 'error') {
+            // Créer un message d'erreur
+            const template = document.getElementById('error-message-template');
+            if (template) {
+                const messageElement = template.content.cloneNode(true);
+                const contentElement = messageElement.querySelector('.message-content');
+                if (contentElement) {
+                    contentElement.textContent = data.content;
+                }
+                
+                const container = document.getElementById('chat-messages');
+                if (container) {
+                    container.appendChild(messageElement);
+                    smartScrollToBottom();
+                }
+            }
+        }
+    });
+});
+
+// Fallback pour la détection de scroll seulement
+document.addEventListener('DOMContentLoaded', () => {
+    setupScrollDetection();
+});
+
 </script>
