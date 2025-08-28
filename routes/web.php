@@ -1,5 +1,6 @@
 <?php
 
+use App\Http\Controllers\ChatStreamController;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Route;
@@ -50,6 +51,11 @@ Route::post('/locale', function () {
 
     return back();
 })->name('locale.set');
+
+// Route API pour le streaming chat
+Route::post('/api/chat/stream', [ChatStreamController::class, 'stream'])
+    ->middleware(['auth'])
+    ->name('chat.stream');
 
 // Redirection des anciennes routes vers la page d'accueil
 Route::redirect('dashboard', '/')->name('dashboard');

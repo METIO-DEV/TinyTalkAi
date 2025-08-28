@@ -7,19 +7,19 @@
     
     @forelse($messages as $message)
         @if($message['role'] === 'user')
-            <div class="flex justify-end mb-4">
+            <div class="flex justify-end mb-4" wire:key="msg-user-{{ $loop->index }}-{{ substr(md5(($message['content'] ?? '') . $loop->index), 0, 8) }}">
                 <div class="bg-custom-black text-white dark:text-custom-white dark:bg-custom-white-dark-mode rounded-tl-xl rounded-tr-xl rounded-bl-xl rounded-br-sm py-2 px-4 max-w-[80%]">
                     <div class="whitespace-pre-wrap">{{ $message['content'] }}</div>
                 </div>
             </div>
         @elseif($message['role'] === 'assistant')
-            <div class="flex justify-start mb-4 animate-fade-in">
+            <div class="flex justify-start mb-4 animate-fade-in" wire:key="msg-assistant-{{ $loop->index }}-{{ substr(md5(($message['content'] ?? '') . $loop->index), 0, 8) }}">
                 <div class="bg-custom-light text-custom-black rounded-lg py-2 px-4 max-w-[80%] rounded-tl-xl rounded-tr-xl rounded-bl-sm rounded-br-xl">
                     <div class="whitespace-pre-wrap">{{ $message['content'] }}</div>
                 </div>
             </div>
         @elseif($message['role'] === 'error')
-            <div class="flex justify-center mb-4">
+            <div class="flex justify-center mb-4" wire:key="msg-error-{{ $loop->index }}-{{ substr(md5(($message['content'] ?? '') . $loop->index), 0, 8) }}">
                 <div class="bg-red-100 border border-red-400 text-red-700 rounded-lg py-2 px-4 max-w-[80%]">
                     <div class="whitespace-pre-wrap">{{ $message['content'] }}</div>
                 </div>

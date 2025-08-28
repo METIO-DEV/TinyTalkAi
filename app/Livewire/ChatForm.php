@@ -8,7 +8,6 @@ use App\Models\Message;
 use App\Services\ConversationMemoryService;
 use App\Services\RagService;
 use Illuminate\Support\Facades\Auth;
-use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Log;
 use Livewire\Attributes\On;
 use Livewire\Component;
@@ -462,6 +461,8 @@ class ChatForm extends Component
 
                         // Informer les autres composants qu'une nouvelle conversation a été créée
                         $this->dispatch('conversationSelected', $this->conversationId);
+                        // Rafraîchir la liste des conversations immédiatement
+                        $this->dispatch('conversationUpdated');
                     } catch (\Exception $e) {
                         Log::error('Erreur lors de la création de la conversation: '.$e->getMessage());
                     }
@@ -478,6 +479,16 @@ class ChatForm extends Component
                         'max_tokens' => $maxTokens,
                     ],
                 ]);
+
+                // Mettre à jour updated_at de la conversation pour l'ordre dans l'historique
+                try {
+                    $conversation->touch();
+                } catch (\Exception $e) {
+                    Log::warning('Impossible de mettre à jour updated_at de la conversation: '.$e->getMessage());
+                }
+
+                // Rafraîchir la liste des conversations après le message utilisateur
+                $this->dispatch('conversationUpdated');
             }
 
             // Récupérer la fenêtre locale (contexte des messages précédents)
@@ -629,7 +640,7 @@ class ChatForm extends Component
 
                     $systemPrompt .= "Utilise ces informations pour enrichir ta réponse à la question de l'utilisateur.";
                 } else {
-                    $systemPrompt = "Aucun document pertinent n'a été trouvé dans la base de connaissances pour cette question. Commence ta réponse en indiquant brièvement que tu réponds selon tes connaissances générales car aucune information spécifique n'a été trouvée dans les documents fournis par l'utilisateur. Puis réponds au mieux à la question posée.";
+                    $systemPrompt = "Aucun document pertinent n'a été trouvé dans la base de connaissances pour cette question. N'indique pas que tu réponds selon tes connaissances générales. Réponds au mieux à la question posée.";
                 }
             }
 
@@ -639,86 +650,68 @@ class ChatForm extends Component
                 'content' => $systemPrompt,
             ]);
 
-            // Configuration de l'API Ollama
-            $ollamaHost = config('services.ollama.host', 'localhost');
-            $ollamaPort = config('services.ollama.port', '11434');
-            $ollamaUrl = 'http://'.$ollamaHost.':'.$ollamaPort.'/api/chat';
+            Log::info('Déclenchement du streaming'.$ragInfoMessage);
 
-            Log::info('Envoi du message à Ollama'.$ragInfoMessage.': '.$ollamaUrl);
-
-            // Préparation du prompt avec le contexte
-            $response = Http::timeout(600)->post($ollamaUrl, [
+            // Déclencher l'événement de streaming avec toutes les données nécessaires
+            $streamingData = [
                 'model' => $this->selectedModel,
                 'messages' => $messages,
-                'options' => [
-                    'temperature' => (float) $temperature,
-                    'max_tokens' => (int) $maxTokens,
-                ],
-                'stream' => false,
-            ]);
+                'conversationId' => $this->conversationId,
+                'ragEnabled' => $this->ragEnabled,
+                'selectedCollection' => $this->selectedCollection,
+                'temperature' => $temperature,
+                'maxTokens' => $maxTokens,
+            ];
 
-            if ($response->successful()) {
-                Log::info('Réponse reçue d\'Ollama avec succès');
+            $this->dispatch('startStreaming', $streamingData);
 
-                // Récupérer la réponse depuis le format de l'API /api/chat
-                $aiResponse = $response->json('message.content');
+            Log::info('Événement startStreaming dispatché');
 
-                // Récupérer les informations de tokens depuis la réponse
-                $promptTokens = $response->json('prompt_eval_count', 0);
-                $responseTokens = $response->json('eval_count', 0);
-                $totalTokens = $promptTokens + $responseTokens;
+            // Désactiver l'indicateur de chargement
+            $this->isLoading = false;
+            $this->dispatch('messageLoadingEnded')->to(TokenCounter::class);
 
-                // Émettre un événement pour mettre à jour le compteur de tokens
-                $this->dispatch('tokensUpdated', $totalTokens);
+        } catch (\Exception $e) {
+            $errorMessage = 'Erreur lors de la préparation du message: '.$e->getMessage();
+            $this->dispatch('messageAdded', ['role' => 'error', 'content' => $errorMessage]);
+            Log::error($errorMessage);
+        }
+    }
 
-                // Sauvegarder la réponse de l'assistant
-                if (Auth::check() && $conversation) {
-                    // Mettre à jour le compteur de tokens de la conversation
-                    $conversation->increment('tokens', $totalTokens);
+    /**
+     * Écouteur pour sauvegarder le message de l'assistant après le streaming
+     */
+    #[On('saveAssistantMessage')]
+    public function saveAssistantMessage($data)
+    {
+        try {
+            if (Auth::check() && isset($data['conversationId']) && isset($data['content'])) {
+                $conversation = Conversation::where('id', $data['conversationId'])
+                    ->where('user_id', Auth::id())
+                    ->first();
 
-                    Message::create([
+                if ($conversation) {
+
+                    // Émettre un événement pour mettre à jour la liste des conversations
+                    $this->dispatch('conversationUpdated');
+                    // Émettre un événement pour mettre à jour le compteur de tokens
+                    $this->dispatch('tokensUpdated', $data['tokens']);
+
+                    // Ne pas réémettre le message assistant ici pour éviter les doublons UI.
+                    // Le message final est désormais injecté depuis le handler SSE 'complete'.
+
+                    Log::info('Message assistant traité après streaming', [
                         'conversation_id' => $conversation->id,
-                        'role' => 'assistant',
-                        'content' => $aiResponse,
-                        'settings' => [
-                            'model' => $this->selectedModel,
-                            'temperature' => $temperature,
-                            'max_tokens' => $maxTokens,
-                            'tokens_used' => $totalTokens, // Stocker les tokens utilisés
-                            'rag_enabled' => $this->ragEnabled, // Indiquer si le RAG était activé
-                            'rag_documents' => ! empty($contextDocuments) ? count($contextDocuments) : 0, // Nombre de documents RAG utilisés
-                        ],
+                        'tokens' => $data['tokens'] ?? 0,
                     ]);
                 }
-
-                // Ajouter la réponse de l'IA à la liste des messages
-                $this->dispatch('messageAdded', ['role' => 'assistant', 'content' => $aiResponse]);
-
-                // Émettre un événement pour mettre à jour la liste des conversations
-                $this->dispatch('conversationUpdated');
-
-            } else {
-                // Gérer les erreurs HTTP
-                $errorMessage = 'Erreur HTTP: '.$response->status().' - '.$response->body();
-                $this->dispatch('messageAdded', ['role' => 'error', 'content' => $errorMessage]);
-                Log::error($errorMessage);
             }
         } catch (\Exception $e) {
-            $errorMessage = 'Erreur lors de l\'envoi du message: '.$e->getMessage();
-            $this->dispatch('messageAdded', ['role' => 'error', 'content' => $errorMessage]);
-            Log::error($errorMessage);
-        } catch (\Throwable $t) {
-            // Capturer toutes les autres erreurs potentielles (y compris les erreurs fatales)
-            $errorMessage = 'Erreur fatale lors de l\'envoi du message: '.$t->getMessage();
-            $this->dispatch('messageAdded', ['role' => 'error', 'content' => $errorMessage]);
-            Log::error($errorMessage);
+            Log::error('Erreur lors de la sauvegarde du message assistant: '.$e->getMessage());
         } finally {
             // Désactiver l'indicateur de chargement
             $this->isLoading = false;
-
-            // Informer les autres composants que l'envoi est terminé
             $this->dispatch('messageLoadingEnded')->to(TokenCounter::class);
-
         }
     }
 
