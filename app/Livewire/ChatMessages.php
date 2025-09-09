@@ -27,6 +27,11 @@ class ChatMessages extends Component
     public string $selectedModel = '';
 
     /**
+     * Les messages prêts pour le rendu (avec segments parsés pour <think>)
+     */
+    public array $parsedMessages = [];
+
+    /**
      * Écoute les événements
      */
     protected $listeners = [
@@ -51,6 +56,9 @@ class ChatMessages extends Component
         if ($conversationId) {
             $this->loadConversation($conversationId);
         }
+
+        // Initialiser l'état rendu
+        $this->buildParsedMessages();
     }
 
     /**
@@ -109,6 +117,7 @@ class ChatMessages extends Component
     {
         $this->conversationId = null;
         $this->messages = [];
+        $this->parsedMessages = [];
     }
 
     /**
@@ -130,6 +139,9 @@ class ChatMessages extends Component
             'messages_count_after' => count($this->messages),
             'last_message_role' => end($this->messages)['role'] ?? 'unknown',
         ]);
+
+        // Reconstruire les segments pour le rendu
+        $this->buildParsedMessages();
 
         // Si on a une conversation active, recharger les messages depuis la BD
         if ($this->conversationId && Auth::check()) {
@@ -166,6 +178,9 @@ class ChatMessages extends Component
 
                 // Remplacer les messages actuels par ceux de la BD
                 $this->messages = $dbMessages;
+
+                // Reconstruire les segments pour le rendu
+                $this->buildParsedMessages();
             }
         } catch (\Exception $e) {
             Log::error('ChatMessages: Erreur lors du rechargement des messages: '.$e->getMessage());
@@ -194,6 +209,7 @@ class ChatMessages extends Component
     public function handleConversationLoaded(array $messages)
     {
         $this->messages = $messages;
+        $this->buildParsedMessages();
     }
 
     /**
@@ -209,6 +225,75 @@ class ChatMessages extends Component
             ]);
             $this->conversationId = $sessionConversationId;
         }
+    }
+
+    /**
+     * Construit les messages parsés pour le rendu, avec séparation des sections <think>.
+     */
+    private function buildParsedMessages(): void
+    {
+        $this->parsedMessages = array_map(function ($msg) {
+            if (($msg['role'] ?? null) === 'assistant') {
+                $content = (string) ($msg['content'] ?? '');
+                $segments = $this->parseThinkSegments($content);
+                $msg['segments'] = $segments;
+            }
+
+            return $msg;
+        }, $this->messages);
+    }
+
+    /**
+     * Parse le contenu pour extraire les sections <think> et renvoyer des segments ordonnés.
+     * Chaque segment: ['type' => 'text'|'think', 'content' => string]
+     */
+    private function parseThinkSegments(string $content): array
+    {
+        if ($content === '') {
+            return [['type' => 'text', 'content' => '']];
+        }
+
+        $pattern = '/<think>([\s\S]*?)<\/think>/i';
+        if (! preg_match_all($pattern, $content, $matches, PREG_OFFSET_CAPTURE)) {
+            // Pas de balises <think>
+            return [['type' => 'text', 'content' => $content]];
+        }
+
+        $segments = [];
+        $lastPos = 0;
+        foreach ($matches[0] as $i => $match) {
+            [$fullMatch, $matchPos] = $match; // texte complet de la balise + positions
+            $thinkInner = $matches[1][$i][0] ?? '';
+
+            // Texte avant la balise
+            if ($matchPos > $lastPos) {
+                $before = substr($content, $lastPos, $matchPos - $lastPos);
+                if ($before !== '') {
+                    $segments[] = ['type' => 'text', 'content' => $before];
+                }
+            }
+
+            // Segment think
+            $segments[] = ['type' => 'think', 'content' => $thinkInner];
+
+            // Avancer le curseur après la balise complète
+            $lastPos = $matchPos + strlen($fullMatch);
+        }
+
+        // Reste du texte après la dernière balise
+        if ($lastPos < strlen($content)) {
+            $after = substr($content, $lastPos);
+            if ($after !== '') {
+                $segments[] = ['type' => 'text', 'content' => $after];
+            }
+        }
+
+        // Si, après parsing, on n'a que des espaces, garder au moins un segment texte vide
+        if (empty($segments)) {
+            $segments[] = ['type' => 'text', 'content' => ''];
+        }
+
+        return $segments;
     }
 
     public function render()

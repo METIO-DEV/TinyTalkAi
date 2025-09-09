@@ -48,7 +48,7 @@
         <div class="bg-custom-light text-custom-black dark:text-custom-white dark:bg-custom-light-dark-mode rounded-lg py-3 px-4">
             <div class="flex items-center space-x-3">
                 <div class="animate-spin h-5 w-5 text-custom-black dark:text-custom-white">
-                    <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                    <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                         <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
                         <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
                     </svg>
@@ -98,6 +98,56 @@
         from, to { border-color: transparent }
         50% { border-color: #000; }
     }
+
+    /* Effet REFLET (shimmer) pour le label "Processus de réflexion" pendant la génération */
+    @keyframes thinkShimmer {
+        0% { background-position: 200% 0; }
+        100% { background-position: -200% 0; }
+    }
+
+    .think-reflect {
+        position: relative;
+        display: inline-block;
+        /* on conserve la couleur du texte d'origine */
+    }
+
+    /* Calque reflet qui passe DANS les lettres */
+    .think-reflect::before {
+        content: attr(data-text);
+        position: absolute;
+        inset: 0;
+        pointer-events: none;
+        /* Dégradé qui balaye de gauche à droite */
+        background-image: linear-gradient(110deg,
+            rgba(255,255,255,0) 0%,
+            rgba(255,255,255,0) 40%,
+            rgba(255,255,255,0.9) 50%,
+            rgba(255,255,255,0) 60%,
+            rgba(255,255,255,0) 100%);
+        background-size: 200% 100%;
+        background-position: 200% 0; /* départ à droite */
+        -webkit-background-clip: text;
+        background-clip: text;
+        -webkit-text-fill-color: transparent;
+        animation: thinkShimmer 1.6s ease-in-out infinite;
+        will-change: background-position;
+        /* Optionnel: léger éclaircissement du reflet par mélange */
+        mix-blend-mode: screen;
+    }
+
+    @media (prefers-color-scheme: dark) {
+        .think-reflect::before {
+            background-image: linear-gradient(110deg,
+                rgba(255,255,255,0) 0%,
+                rgba(255,255,255,0) 40%,
+                rgba(255,255,255,1) 50%,
+                rgba(255,255,255,0) 60%,
+                rgba(255,255,255,0) 100%);
+        }
+    }
+
+    /* Supprimer tout ancien fallback (::after) */
+    .think-reflect::after { content: none !important; }
 </style>
 
 <script>
@@ -139,6 +189,107 @@ let currentEventSource = null;
 let currentAIMessage = null;
 let isUserScrolling = false;
 
+// Renderer de streaming pour gérer les balises <think> en direct
+let streamingRenderer = null;
+
+function initStreamingRenderer(containerEl) {
+    // containerEl est la div .message-content
+    const state = {
+        container: containerEl,
+        mode: 'text', // 'text' | 'think'
+        buffer: '',
+        textDiv: null, // div pour texte normal (whitespace-pre-wrap)
+        thinkDetails: null,
+        thinkContentDiv: null,
+    };
+
+    const ensureTextDiv = () => {
+        if (!state.textDiv || state.textDiv.parentNode !== state.container) {
+            const div = document.createElement('div');
+            div.className = 'whitespace-pre-wrap';
+            state.container.appendChild(div);
+            state.textDiv = div;
+        }
+    };
+
+    const openThink = () => {
+        // Ferme le buffer texte courant avant d'ouvrir
+        flushText();
+        state.mode = 'think';
+        const details = document.createElement('details');
+        details.className = 'my-2 group';
+        const summary = document.createElement('summary');
+        summary.className = 'cursor-pointer select-none text-sm text-gray-600 flex items-center gap-2';
+        const thinkLabel = `${'{{ __("Processus de réflexion") }}'}`;
+        summary.innerHTML = `
+            <svg class="w-4 h-4 transition-transform duration-200 group-open:rotate-90" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7" />
+            </svg>
+            <span class="think-reflect" data-text="${thinkLabel}">${thinkLabel}</span>
+        `;
+        const content = document.createElement('div');
+        content.className = 'mt-2 border border-custom-mid bg-white text-custom-black rounded p-3 whitespace-pre-wrap text-sm';
+        details.appendChild(summary);
+        details.appendChild(content);
+        state.container.appendChild(details);
+        state.thinkDetails = details;
+        state.thinkContentDiv = content;
+    };
+
+    const closeThink = () => {
+        state.mode = 'text';
+        state.thinkDetails = null;
+        state.thinkContentDiv = null;
+    };
+
+    const flushText = () => {
+        if (!state.buffer) return;
+        if (state.mode === 'think') {
+            if (state.thinkContentDiv) state.thinkContentDiv.textContent += state.buffer;
+        } else {
+            ensureTextDiv();
+            state.textDiv.textContent += state.buffer;
+        }
+        state.buffer = '';
+    };
+
+    const process = (chunk) => {
+        let i = 0;
+        while (i < chunk.length) {
+            const openIdx = chunk.indexOf('<think>', i);
+            const closeIdx = chunk.indexOf('</think>', i);
+
+            if (state.mode === 'text') {
+                if (openIdx === -1) {
+                    state.buffer += chunk.slice(i);
+                    i = chunk.length;
+                } else {
+                    // ajouter tout avant <think>
+                    state.buffer += chunk.slice(i, openIdx);
+                    flushText();
+                    i = openIdx + 7; // longueur de '<think>'
+                    openThink();
+                }
+            } else { // in think
+                if (closeIdx === -1) {
+                    state.buffer += chunk.slice(i);
+                    i = chunk.length;
+                } else {
+                    // ajouter contenu jusqu'à </think>
+                    state.buffer += chunk.slice(i, closeIdx);
+                    flushText();
+                    i = closeIdx + 8; // longueur de '</think>'
+                    closeThink();
+                }
+            }
+        }
+        // Ne pas flushText ici pour conserver l'incrémentalité (éviter d'insérer des noeuds vides)
+        flushText();
+    };
+
+    return { process };
+}
+
 // Fonction pour détecter si l'utilisateur scrolle manuellement
 function setupScrollDetection() {
     const container = document.getElementById('chat-messages');
@@ -175,9 +326,13 @@ function createAIMessage() {
 
     container.appendChild(messageElement);
     
-    // Retourner l'élément de contenu pour pouvoir y ajouter du texte
+    // Retourner l'élément de contenu pour pouvoir y ajouter du texte/DOM
     const messages = container.querySelectorAll('.message-content');
-    return messages[messages.length - 1];
+    const el = messages[messages.length - 1] || null;
+    if (el) {
+        streamingRenderer = initStreamingRenderer(el);
+    }
+    return el;
 }
 
 // Fonction pour ajouter un message de chargement
@@ -271,9 +426,6 @@ function handleStreaming(data) {
                     // Arrêter le polling et faire un dernier refresh
                     stopPolling();
                     setTimeout(() => {
-                        if (window.Livewire) {
-                            window.Livewire.dispatch('refreshMessages');
-                        }
                         // Nettoyer le message temporaire
                         if (currentAIMessage) {
                             const wrapper = currentAIMessage.closest('.flex');
@@ -282,6 +434,7 @@ function handleStreaming(data) {
                             }
                         }
                         currentAIMessage = null;
+                        streamingRenderer = null;
                         hideLoadingMessage();
                     }, 500);
                     
@@ -334,8 +487,11 @@ function handleSSEEvent(data) {
                 if (!currentAIMessage) {
                     currentAIMessage = createAIMessage();
                 }
-                if (currentAIMessage) {
-                    currentAIMessage.textContent += data.content;
+                if (!streamingRenderer && currentAIMessage) {
+                    streamingRenderer = initStreamingRenderer(currentAIMessage);
+                }
+                if (currentAIMessage && streamingRenderer) {
+                    streamingRenderer.process(data.content);
                     smartScrollToBottom();
                 } else {
                     console.warn('chunk reçu mais currentAIMessage est introuvable — message non affiché');
@@ -344,6 +500,13 @@ function handleSSEEvent(data) {
             break;
 
         case 'complete':
+            // Retirer l'effet reflet avant nettoyage
+            try {
+                if (currentAIMessage) {
+                    const wrapper = currentAIMessage.closest('.flex');
+                    if (wrapper) wrapper.querySelectorAll('.think-reflect').forEach(el => el.classList.remove('think-reflect'));
+                }
+            } catch {}
             // Injecter immédiatement le message final dans l'état Livewire
             try {
                 const finalText = (typeof data.response === 'string' && data.response.length)
@@ -365,6 +528,7 @@ function handleSSEEvent(data) {
                             }
                         }
                         currentAIMessage = null;
+                        streamingRenderer = null;
                         hideLoadingMessage();
                     }, 100);
                 }
@@ -384,6 +548,13 @@ function handleSSEEvent(data) {
             break;
 
         case 'error':
+            // Retirer l'effet reflet
+            try {
+                if (currentAIMessage) {
+                    const wrapper = currentAIMessage.closest('.flex');
+                    if (wrapper) wrapper.querySelectorAll('.think-reflect').forEach(el => el.classList.remove('think-reflect'));
+                }
+            } catch {}
             console.error('Erreur SSE:', data.message);
             hideLoadingMessage();
             
@@ -395,11 +566,20 @@ function handleSSEEvent(data) {
             }
             
             currentAIMessage = null;
+            streamingRenderer = null;
             break;
 
         case 'close':
+            // Retirer l'effet reflet
+            try {
+                if (currentAIMessage) {
+                    const wrapper = currentAIMessage.closest('.flex');
+                    if (wrapper) wrapper.querySelectorAll('.think-reflect').forEach(el => el.classList.remove('think-reflect'));
+                }
+            } catch {}
             console.log('Connexion SSE fermée');
             currentAIMessage = null;
+            streamingRenderer = null;
             break;
     }
 }
