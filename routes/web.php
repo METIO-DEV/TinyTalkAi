@@ -54,7 +54,7 @@ Route::post('/locale', function () {
 
 // Route API pour le streaming chat
 Route::post('/api/chat/stream', [ChatStreamController::class, 'stream'])
-    ->middleware(['auth'])
+    ->middleware(['auth', \App\Http\Middleware\SetLocale::class])
     ->name('chat.stream');
 
 // Redirection des anciennes routes vers la page d'accueil
