@@ -287,9 +287,9 @@ class ChatStreamController extends Controller
         return 0;
     }
 
-    private function updateAssistantMessageInDatabase(Conversation $conversation, string $content)
-    {
-        // Cette méthode devrait être implémentée pour mettre à jour le message de l'assistant dans la base de données
-        // Pour l'instant, elle ne fait rien
-    }
+    // private function updateAssistantMessageInDatabase(Conversation $conversation, string $content)
+    // {
+    //     // Cette méthode devrait être implémentée pour mettre à jour le message de l'assistant dans la base de données
+    //     // Pour l'instant, elle ne fait rien
+    // }
 }
