@@ -80,7 +80,7 @@ class EmbeddingModelResource extends Resource
                     ->visible(fn ($record) => $record->full_name !== EmbeddingModel::getActiveModel())
                     ->action(function ($record) {
                         EmbeddingModel::setActiveModel($record->full_name);
-                        
+
                         \Filament\Notifications\Notification::make()
                             ->title('Modèle d\'embedding activé')
                             ->body("Le modèle {$record->name} est maintenant actif")

@@ -24,7 +24,7 @@ class EmbeddingModel extends Model
     public static function getActiveModel(): string
     {
         $activeModel = self::where('is_active', true)->first();
-        
+
         return $activeModel ? $activeModel->model_name : 'nomic-embed-text';
     }
 
@@ -35,7 +35,7 @@ class EmbeddingModel extends Model
     {
         // Désactiver tous les modèles
         self::query()->update(['is_active' => false]);
-        
+
         // Activer le modèle spécifié ou le créer s'il n'existe pas
         self::updateOrCreate(
             ['model_name' => $modelName],

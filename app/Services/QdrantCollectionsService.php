@@ -6,7 +6,6 @@ use App\Models\Collection;
 use App\Models\EmbeddingModel;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Log;
-use Illuminate\Support\Str;
 
 class QdrantCollectionsService
 {
@@ -36,11 +35,11 @@ class QdrantCollectionsService
 
         // Modèle d'embedding par défaut
         $this->embeddingModel = EmbeddingModel::getActiveModel();
-        
+
         Log::info('QdrantCollectionsService initialized', [
             'embedding_model' => $this->embeddingModel,
             'qdrant_host' => $this->qdrantHost,
-            'qdrant_port' => $this->qdrantPort
+            'qdrant_port' => $this->qdrantPort,
         ]);
     }
 

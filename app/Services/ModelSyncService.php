@@ -209,11 +209,12 @@ class ModelSyncService
             $url = "http://{$this->ollamaHost}:{$this->ollamaPort}/api/show";
             $response = Http::timeout(30)->post($url, ['name' => $modelName]);
 
-            if (!$response->successful()) {
+            if (! $response->successful()) {
                 Log::warning('ModelSyncService: échec /api/show', [
                     'model' => $modelName,
                     'status' => $response->status(),
                 ]);
+
                 return null;
             }
 
@@ -223,6 +224,7 @@ class ModelSyncService
                 'model' => $modelName,
                 'message' => $e->getMessage(),
             ]);
+
             return null;
         }
     }
@@ -233,39 +235,40 @@ class ModelSyncService
     protected function isEmbeddingModel(string $modelName): bool
     {
         $details = $this->getModelDetails($modelName);
-        
-        if (!$details) {
+
+        if (! $details) {
             Log::warning('ModelSyncService: impossible de récupérer les détails du modèle', [
-                'model' => $modelName
+                'model' => $modelName,
             ]);
+
             return false;
         }
 
         // Vérifier les capacités
         if (isset($details['capabilities'])) {
             $capabilities = $details['capabilities'];
-            
+
             // Les modèles d'embedding n'ont pas les capacités "completion" ou "chat"
             $hasCompletion = in_array('completion', $capabilities);
             $hasChat = in_array('chat', $capabilities);
-            
-            $isEmbedding = !$hasCompletion && !$hasChat;
-            
+
+            $isEmbedding = ! $hasCompletion && ! $hasChat;
+
             Log::info('ModelSyncService: analyse des capabilities', [
                 'model' => $modelName,
                 'capabilities' => $capabilities,
                 'has_completion' => $hasCompletion,
                 'has_chat' => $hasChat,
-                'is_embedding' => $isEmbedding
+                'is_embedding' => $isEmbedding,
             ]);
-            
+
             return $isEmbedding;
         }
 
         Log::warning('ModelSyncService: aucune capability trouvée pour le modèle', [
-            'model' => $modelName
+            'model' => $modelName,
         ]);
-        
+
         return false;
     }
 }

@@ -2,10 +2,10 @@
 
 namespace App\Services;
 
+use App\Models\EmbeddingModel;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Str;
-use App\Models\EmbeddingModel;
 
 class RagService
 {
@@ -42,11 +42,11 @@ class RagService
         $this->ollamaHost = config('services.ollama.host', 'host.docker.internal');
         $this->ollamaPort = config('services.ollama.port', '11434');
         $this->embeddingModel = EmbeddingModel::getActiveModel();
-        
+
         Log::info('RagService initialized', [
             'embedding_model' => $this->embeddingModel,
             'ollama_host' => $this->ollamaHost,
-            'ollama_port' => $this->ollamaPort
+            'ollama_port' => $this->ollamaPort,
         ]);
 
         // Configuration Qdrant
@@ -120,7 +120,7 @@ class RagService
     {
         Log::info('Generating embedding', [
             'model' => $model ?? $this->embeddingModel,
-            'text_length' => strlen($text)
+            'text_length' => strlen($text),
         ]);
 
         try {
@@ -138,15 +138,16 @@ class RagService
                 $embedding = $response->json('embedding', []);
                 Log::info('Embedding generated successfully', [
                     'model' => $model ?? $this->embeddingModel,
-                    'embedding_dimensions' => count($embedding ?? [])
+                    'embedding_dimensions' => count($embedding ?? []),
                 ]);
+
                 return $embedding;
             }
 
             Log::error('Failed to generate embedding', [
                 'model' => $model ?? $this->embeddingModel,
                 'status' => $response->status(),
-                'response' => $response->body()
+                'response' => $response->body(),
             ]);
 
             return [];
