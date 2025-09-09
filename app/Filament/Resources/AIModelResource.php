@@ -34,6 +34,12 @@ class AIModelResource extends Resource
         return false;
     }
 
+    // Disable editing of models
+    public static function canEdit($record): bool
+    {
+        return false;
+    }
+
     public static function form(Form $form): Form
     {
         return $form
@@ -51,6 +57,15 @@ class AIModelResource extends Resource
                     ->numeric()
                     ->disabled()
                     ->dehydrated(false),
+                Forms\Components\Select::make('family')
+                    ->label(__('Family'))
+                    ->options([
+                        'llm' => 'LLM',
+                        'embedding' => 'Embedding',
+                    ])
+                    ->default('llm')
+                    ->disabled()
+                    ->dehydrated(false),
                 Forms\Components\Toggle::make('is_active')
                     ->label(__('Active'))
                     ->default(true),
@@ -63,6 +78,7 @@ class AIModelResource extends Resource
                     ->multiple()
                     ->preload()
                     ->searchable()
+                    ->visible(fn ($record) => $record && $record->family === 'llm')
                     ->saveRelationshipsUsing(function ($record, $state) {
                         $record->syncGroups($state ? array_values((array) $state) : []);
                     }),
@@ -90,6 +106,21 @@ class AIModelResource extends Resource
                         return $gb;
                     })
                     ->sortable(),
+                Tables\Columns\TextColumn::make('family')
+                    ->label(__('Family'))
+                    ->formatStateUsing(fn (string $state): string => match ($state) {
+                        'llm' => 'LLM',
+                        'embedding' => 'Embedding',
+                        default => $state,
+                    })
+                    ->badge()
+                    ->color(fn (string $state): string => match ($state) {
+                        'llm' => 'success',
+                        'embedding' => 'info',
+                        default => 'gray',
+                    })
+                    ->searchable()
+                    ->sortable(),
                 Tables\Columns\IconColumn::make('is_active')
                     ->label(__('Active'))
                     ->boolean()
@@ -105,6 +136,12 @@ class AIModelResource extends Resource
                     ->sortable(),
             ])
             ->filters([
+                Tables\Filters\SelectFilter::make('family')
+                    ->label(__('Family'))
+                    ->options([
+                        'llm' => 'LLM',
+                        'embedding' => 'Embedding',
+                    ]),
             ])
             // Make the table read-only: no per-row edit/delete actions
             ->actions([
@@ -188,9 +225,6 @@ class AIModelResource extends Resource
     {
         return [
             'index' => Pages\ListAIModels::route('/'),
-            // We keep create/edit routes available for future admin usage, but the Create button is hidden and table is read-only
-            'create' => Pages\CreateAIModel::route('/create'),
-            'edit' => Pages\EditAIModel::route('/{record}/edit'),
         ];
     }
 }

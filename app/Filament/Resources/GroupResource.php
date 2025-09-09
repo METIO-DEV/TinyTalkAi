@@ -53,7 +53,11 @@ class GroupResource extends Resource
                     ->relationship(
                         'models',
                         'name',
-                        modifyQueryUsing: fn ($query) => $query->where('models.is_active', true)->select(['models.id', 'models.name'])->orderBy('models.name')
+                        modifyQueryUsing: fn ($query) => $query
+                            ->where('models.is_active', true)
+                            ->where('models.family', 'llm')
+                            ->select(['models.id', 'models.name'])
+                            ->orderBy('models.name')
                     )
                     ->multiple()
                     ->preload()

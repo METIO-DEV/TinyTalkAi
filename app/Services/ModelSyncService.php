@@ -63,16 +63,19 @@ class ModelSyncService
                 }
 
                 // Filtrage: ignorer les modèles d'embedding
-                if ($this->isEmbeddingModel($fullName)) {
-                    $stats['skipped']++;
+                // if ($this->isEmbeddingModel($fullName)) {
+                //     $stats['skipped']++;
 
-                    continue;
-                }
+                //     continue;
+                // }
 
                 $shortName = explode(':', $fullName)[0];
                 $size = (int) ($model['size'] ?? 0);
 
                 $seen[$fullName] = true;
+
+                // Déterminer la famille du modèle
+                $family = $this->isEmbeddingModel($fullName) ? 'embedding' : 'llm';
 
                 $record = AIModel::query()->where('full_name', $fullName)->first();
                 if (! $record) {
@@ -80,6 +83,7 @@ class ModelSyncService
                         'name' => $shortName,
                         'full_name' => $fullName,
                         'size' => $size,
+                        'family' => $family,
                         'is_active' => true,
                         'last_synced_at' => $now,
                     ]);
@@ -88,16 +92,12 @@ class ModelSyncService
                     $record->fill([
                         'name' => $shortName,
                         'size' => $size,
+                        'family' => $family,
                         'is_active' => true,
                         'last_synced_at' => $now,
                     ]);
-                    if ($record->isDirty()) {
-                        $record->save();
-                        $stats['updated']++;
-                    } else {
-                        // au moins mettre à jour last_synced_at
-                        $record->touch();
-                    }
+                    $record->save(); // Force la mise à jour
+                    $stats['updated']++;
                 }
             }
 
@@ -161,12 +161,16 @@ class ModelSyncService
             $size = (int) ($target['size'] ?? 0);
             $now = now();
 
+            // Déterminer la famille du modèle
+            $family = $this->isEmbeddingModel($fullName) ? 'embedding' : 'llm';
+
             $record = AIModel::query()->where('full_name', $fullName)->first();
             if (! $record) {
                 AIModel::query()->create([
                     'name' => $shortName,
                     'full_name' => $fullName,
                     'size' => $size,
+                    'family' => $family,
                     'is_active' => true,
                     'last_synced_at' => $now,
                 ]);
@@ -176,6 +180,7 @@ class ModelSyncService
             $record->fill([
                 'name' => $shortName,
                 'size' => $size,
+                'family' => $family,
                 'is_active' => true,
                 'last_synced_at' => $now,
             ]);
@@ -196,30 +201,71 @@ class ModelSyncService
     }
 
     /**
-     * Détermine si un modèle est un modèle d'embedding.
+     * Récupère les détails d'un modèle via l'API /api/show d'Ollama.
+     */
+    protected function getModelDetails(string $modelName): ?array
+    {
+        try {
+            $url = "http://{$this->ollamaHost}:{$this->ollamaPort}/api/show";
+            $response = Http::timeout(30)->post($url, ['name' => $modelName]);
+
+            if (!$response->successful()) {
+                Log::warning('ModelSyncService: échec /api/show', [
+                    'model' => $modelName,
+                    'status' => $response->status(),
+                ]);
+                return null;
+            }
+
+            return $response->json();
+        } catch (\Throwable $e) {
+            Log::error('ModelSyncService: exception /api/show', [
+                'model' => $modelName,
+                'message' => $e->getMessage(),
+            ]);
+            return null;
+        }
+    }
+
+    /**
+     * Détermine si un modèle est un modèle d'embedding basé sur ses capabilities.
      */
     protected function isEmbeddingModel(string $modelName): bool
     {
-        $name = strtolower($modelName);
-        $configured = strtolower((string) config('services.ollama.embedding_model', 'nomic-embed-text'));
-
-        if ($name === $configured) {
-            return true;
+        $details = $this->getModelDetails($modelName);
+        
+        if (!$details) {
+            Log::warning('ModelSyncService: impossible de récupérer les détails du modèle', [
+                'model' => $modelName
+            ]);
+            return false;
         }
 
-        // Mots-clés typiques pour les embeddings
-        $keywords = ['embed', 'embedding', 'encoder', 'e5', 'bge', 'gte', 'minilm', 'm3'];
-        foreach ($keywords as $kw) {
-            if (str_contains($name, $kw)) {
-                return true;
-            }
+        // Vérifier les capacités
+        if (isset($details['capabilities'])) {
+            $capabilities = $details['capabilities'];
+            
+            // Les modèles d'embedding n'ont pas les capacités "completion" ou "chat"
+            $hasCompletion = in_array('completion', $capabilities);
+            $hasChat = in_array('chat', $capabilities);
+            
+            $isEmbedding = !$hasCompletion && !$hasChat;
+            
+            Log::info('ModelSyncService: analyse des capabilities', [
+                'model' => $modelName,
+                'capabilities' => $capabilities,
+                'has_completion' => $hasCompletion,
+                'has_chat' => $hasChat,
+                'is_embedding' => $isEmbedding
+            ]);
+            
+            return $isEmbedding;
         }
 
-        // Cas spécifique mentionné par l'utilisateur
-        if (str_contains($name, 'bomic-embed')) {
-            return true;
-        }
-
+        Log::warning('ModelSyncService: aucune capability trouvée pour le modèle', [
+            'model' => $modelName
+        ]);
+        
         return false;
     }
 }

@@ -16,6 +16,7 @@ class AIModel extends Model
         'name',
         'full_name',
         'size',
+        'family',
         'is_active',
         'last_synced_at',
     ];
@@ -23,6 +24,7 @@ class AIModel extends Model
     protected $casts = [
         'is_active' => 'boolean',
         'last_synced_at' => 'datetime',
+        'family' => 'string',
     ];
 
     /**

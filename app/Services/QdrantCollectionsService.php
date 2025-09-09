@@ -3,6 +3,7 @@
 namespace App\Services;
 
 use App\Models\Collection;
+use App\Models\EmbeddingModel;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Str;
@@ -34,7 +35,13 @@ class QdrantCollectionsService
         $this->qdrantCollection = config('services.qdrant.collection', 'docs');
 
         // Modèle d'embedding par défaut
-        $this->embeddingModel = config('services.ollama.embedding_model', 'nomic-embed-text');
+        $this->embeddingModel = EmbeddingModel::getActiveModel();
+        
+        Log::info('QdrantCollectionsService initialized', [
+            'embedding_model' => $this->embeddingModel,
+            'qdrant_host' => $this->qdrantHost,
+            'qdrant_port' => $this->qdrantPort
+        ]);
     }
 
     /**
@@ -303,23 +310,6 @@ class QdrantCollectionsService
     {
         // Dimension par défaut pour nomic-embed-text
         $dimension = 768;
-
-        // Ajuster la dimension en fonction du modèle d'embedding
-        if (Str::contains($this->embeddingModel, 'bge-m3')) {
-            $dimension = 1024; // Dimension pour bge-m3
-        } elseif (Str::contains($this->embeddingModel, 'bge-large')) {
-            $dimension = 1024;
-        } elseif (Str::contains($this->embeddingModel, 'bge-base')) {
-            $dimension = 768;
-        } elseif (Str::contains($this->embeddingModel, 'bge-small')) {
-            $dimension = 384;
-        } elseif (Str::contains($this->embeddingModel, 'e5-large')) {
-            $dimension = 1024;
-        } elseif (Str::contains($this->embeddingModel, 'e5-base')) {
-            $dimension = 768;
-        } elseif (Str::contains($this->embeddingModel, 'e5-small')) {
-            $dimension = 384;
-        }
 
         return $dimension;
     }

@@ -5,6 +5,7 @@ namespace App\Services;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Str;
+use App\Models\EmbeddingModel;
 
 class RagService
 {
@@ -40,7 +41,13 @@ class RagService
         // Configuration Ollama
         $this->ollamaHost = config('services.ollama.host', 'host.docker.internal');
         $this->ollamaPort = config('services.ollama.port', '11434');
-        $this->embeddingModel = config('services.ollama.embedding_model', 'nomic-embed-text');
+        $this->embeddingModel = EmbeddingModel::getActiveModel();
+        
+        Log::info('RagService initialized', [
+            'embedding_model' => $this->embeddingModel,
+            'ollama_host' => $this->ollamaHost,
+            'ollama_port' => $this->ollamaPort
+        ]);
 
         // Configuration Qdrant
         $this->qdrantHost = config('services.qdrant.host', 'host.docker.internal');
@@ -111,12 +118,16 @@ class RagService
      */
     public function generateEmbedding(string $text, ?string $model = null): array
     {
-        try {
+        Log::info('Generating embedding', [
+            'model' => $model ?? $this->embeddingModel,
+            'text_length' => strlen($text)
+        ]);
 
+        try {
             $ollamaUrl = "http://{$this->ollamaHost}:{$this->ollamaPort}/api/embeddings";
 
             $response = Http::post($ollamaUrl, [
-                'model' => $model,
+                'model' => $model ?? $this->embeddingModel,
                 'prompt' => $text,
                 'options' => [
                     'temperature' => 0.0,
@@ -124,16 +135,21 @@ class RagService
             ]);
 
             if ($response->successful()) {
-                // Log::info('Embedding généré avec succès', [
-                //     'text' => $text,
-                //     'embedding' => $response->json('embedding', []),
-                // ]);
-                return $response->json('embedding', []);
-            } else {
-                Log::error('Erreur lors de la génération de l\'embedding: '.$response->body());
-
-                return [];
+                $embedding = $response->json('embedding', []);
+                Log::info('Embedding generated successfully', [
+                    'model' => $model ?? $this->embeddingModel,
+                    'embedding_dimensions' => count($embedding ?? [])
+                ]);
+                return $embedding;
             }
+
+            Log::error('Failed to generate embedding', [
+                'model' => $model ?? $this->embeddingModel,
+                'status' => $response->status(),
+                'response' => $response->body()
+            ]);
+
+            return [];
         } catch (\Exception $e) {
             Log::error('Exception lors de la génération de l\'embedding: '.$e->getMessage());
 
