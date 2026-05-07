@@ -52,11 +52,16 @@ class ConversationMemoryService
         foreach ($messages as $message) {
             $formattedMessages[] = [
                 'role' => $message->role, // utilisateur ou assistant
-                'content' => $message->content, // contenu du message
+                'content' => $this->contentForPrompt($message->content), // contenu du message
             ];
         }
 
         return $formattedMessages;
+    }
+
+    private function contentForPrompt(string $content): string
+    {
+        return trim((string) preg_replace('/<think>[\s\S]*?<\/think>/i', '', $content));
     }
 
     /**

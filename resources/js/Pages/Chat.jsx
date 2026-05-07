@@ -1,6 +1,9 @@
 import { useEffect, useMemo, useRef, useState } from "react"
 import {
+  ArrowDown,
+  BrainCircuit,
   ChevronDown,
+  Copy,
   FilePlus,
   Folder,
   Loader2,
@@ -9,6 +12,7 @@ import {
   Plus,
   Send,
   Settings2,
+  Square,
   Trash2,
   User,
 } from "lucide-react"
@@ -107,23 +111,188 @@ function formatSize(bytes) {
 
 function splitThinkSegments(content) {
   const segments = []
-  const regex = /<think>([\s\S]*?)<\/think>/gi
-  let lastIndex = 0
-  let match
+  const lowerContent = content.toLowerCase()
+  let cursor = 0
 
-  while ((match = regex.exec(content)) !== null) {
-    if (match.index > lastIndex) {
-      segments.push({ type: "text", content: content.slice(lastIndex, match.index) })
+  while (cursor < content.length) {
+    const start = lowerContent.indexOf("<think>", cursor)
+
+    if (start === -1) {
+      const text = content.slice(cursor)
+      if (text) segments.push({ type: "text", content: text })
+      break
     }
-    segments.push({ type: "think", content: match[1] })
-    lastIndex = regex.lastIndex
-  }
 
-  if (lastIndex < content.length) {
-    segments.push({ type: "text", content: content.slice(lastIndex) })
+    if (start > cursor) {
+      segments.push({ type: "text", content: content.slice(cursor, start) })
+    }
+
+    const contentStart = start + "<think>".length
+    const end = lowerContent.indexOf("</think>", contentStart)
+
+    if (end === -1) {
+      segments.push({ type: "think", content: content.slice(contentStart), isStreaming: true })
+      break
+    }
+
+    segments.push({ type: "think", content: content.slice(contentStart, end), isStreaming: false })
+    cursor = end + "</think>".length
   }
 
   return segments.length ? segments : [{ type: "text", content }]
+}
+
+function thinkingPreview(content) {
+  const cleanContent = content
+    .replace(/```[\s\S]*?```/g, " bloc de code ")
+    .replace(/[#>*_`\[\]()]/g, "")
+    .replace(/\s+/g, " ")
+    .trim()
+
+  if (!cleanContent) return "Voir les détails de la réflexion du modèle."
+
+  return cleanContent.length > 140 ? `${cleanContent.slice(0, 140)}...` : cleanContent
+}
+
+function isMarkdownBlockStart(line) {
+  return (
+    /^```/.test(line) ||
+    /^#{1,4}\s+/.test(line) ||
+    /^>\s?/.test(line) ||
+    /^[-*]\s+/.test(line) ||
+    /^\d+\.\s+/.test(line)
+  )
+}
+
+function parseMarkdownBlocks(content) {
+  const lines = content.replace(/\r\n/g, "\n").split("\n")
+  const blocks = []
+  let index = 0
+
+  while (index < lines.length) {
+    const line = lines[index]
+
+    if (!line.trim()) {
+      index += 1
+      continue
+    }
+
+    const fence = line.match(/^```\s*([\w-]+)?\s*$/)
+    if (fence) {
+      const language = fence[1] ?? ""
+      const code = []
+      index += 1
+
+      while (index < lines.length && !/^```/.test(lines[index])) {
+        code.push(lines[index])
+        index += 1
+      }
+
+      if (index < lines.length) index += 1
+      blocks.push({ type: "code", language, content: code.join("\n") })
+      continue
+    }
+
+    const heading = line.match(/^(#{1,4})\s+(.+)$/)
+    if (heading) {
+      blocks.push({ type: "heading", level: heading[1].length, content: heading[2] })
+      index += 1
+      continue
+    }
+
+    if (/^>\s?/.test(line)) {
+      const quote = []
+      while (index < lines.length && /^>\s?/.test(lines[index])) {
+        quote.push(lines[index].replace(/^>\s?/, ""))
+        index += 1
+      }
+      blocks.push({ type: "quote", content: quote.join("\n") })
+      continue
+    }
+
+    if (/^[-*]\s+/.test(line)) {
+      const items = []
+      while (index < lines.length && /^[-*]\s+/.test(lines[index])) {
+        items.push(lines[index].replace(/^[-*]\s+/, ""))
+        index += 1
+      }
+      blocks.push({ type: "list", ordered: false, items })
+      continue
+    }
+
+    if (/^\d+\.\s+/.test(line)) {
+      const items = []
+      while (index < lines.length && /^\d+\.\s+/.test(lines[index])) {
+        items.push(lines[index].replace(/^\d+\.\s+/, ""))
+        index += 1
+      }
+      blocks.push({ type: "list", ordered: true, items })
+      continue
+    }
+
+    const paragraph = [line]
+    index += 1
+    while (index < lines.length && lines[index].trim() && !isMarkdownBlockStart(lines[index])) {
+      paragraph.push(lines[index])
+      index += 1
+    }
+    blocks.push({ type: "paragraph", content: paragraph.join("\n") })
+  }
+
+  return blocks
+}
+
+function renderInlineMarkdown(text, keyPrefix) {
+  const parts = []
+  const regex = /(\[[^\]]+\]\(https?:\/\/[^\s)]+\)|`[^`]+`|\*\*[^*]+\*\*|\*[^*]+\*)/g
+  let lastIndex = 0
+  let match
+
+  while ((match = regex.exec(text)) !== null) {
+    if (match.index > lastIndex) {
+      parts.push(renderLineBreaks(text.slice(lastIndex, match.index), `${keyPrefix}-text-${lastIndex}`))
+    }
+
+    const token = match[0]
+    if (token.startsWith("`")) {
+      parts.push(
+        <code key={`${keyPrefix}-code-${match.index}`} className="rounded bg-background/80 px-1.5 py-0.5 font-mono text-[0.92em]">
+          {token.slice(1, -1)}
+        </code>
+      )
+    } else if (token.startsWith("**")) {
+      parts.push(<strong key={`${keyPrefix}-strong-${match.index}`}>{token.slice(2, -2)}</strong>)
+    } else if (token.startsWith("*")) {
+      parts.push(<em key={`${keyPrefix}-em-${match.index}`}>{token.slice(1, -1)}</em>)
+    } else {
+      const link = token.match(/^\[([^\]]+)\]\((https?:\/\/[^\s)]+)\)$/)
+      parts.push(
+        <a
+          key={`${keyPrefix}-link-${match.index}`}
+          href={link[2]}
+          target="_blank"
+          rel="noreferrer"
+          className="font-medium underline underline-offset-4"
+        >
+          {link[1]}
+        </a>
+      )
+    }
+
+    lastIndex = regex.lastIndex
+  }
+
+  if (lastIndex < text.length) {
+    parts.push(renderLineBreaks(text.slice(lastIndex), `${keyPrefix}-text-${lastIndex}`))
+  }
+
+  return parts.flat()
+}
+
+function renderLineBreaks(text, keyPrefix) {
+  return text.split("\n").flatMap((line, index, lines) =>
+    index < lines.length - 1 ? [line, <br key={`${keyPrefix}-br-${index}`} />] : [line]
+  )
 }
 
 export default function Chat({ initialState }) {
@@ -141,7 +310,11 @@ export default function Chat({ initialState }) {
   const [isUploadingDocument, setIsUploadingDocument] = useState(false)
   const [documentUploadError, setDocumentUploadError] = useState("")
   const [error, setError] = useState("")
+  const [showScrollToBottom, setShowScrollToBottom] = useState(false)
   const messagesEndRef = useRef(null)
+  const scrollViewportRef = useRef(null)
+  const abortControllerRef = useRef(null)
+  const shouldStickToBottomRef = useRef(true)
   const isOllamaAvailable = state.ollama?.available !== false
   const ollamaMessage = state.ollama?.message ?? "Ollama n'est pas accessible."
 
@@ -150,7 +323,9 @@ export default function Chat({ initialState }) {
   }, [initialState.messages])
 
   useEffect(() => {
-    messagesEndRef.current?.scrollIntoView({ behavior: "smooth", block: "end" })
+    if (shouldStickToBottomRef.current) {
+      scrollToBottom(messages.some((message) => message.isLoading) ? "auto" : "smooth")
+    }
   }, [messages])
 
   const selectedConversation = useMemo(
@@ -167,6 +342,41 @@ export default function Chat({ initialState }) {
     const nextState = await jsonRequest("/api/chat/state")
     setState(nextState)
     setMessages(nextState.messages ?? [])
+  }
+
+  function scrollToBottom(behavior = "smooth") {
+    messagesEndRef.current?.scrollIntoView({ behavior, block: "end" })
+    shouldStickToBottomRef.current = true
+    setShowScrollToBottom(false)
+  }
+
+  function handleScroll(event) {
+    const viewport = event.currentTarget
+    const distanceFromBottom = viewport.scrollHeight - viewport.scrollTop - viewport.clientHeight
+    const isNearBottom = distanceFromBottom < 120
+
+    shouldStickToBottomRef.current = isNearBottom
+    setShowScrollToBottom(!isNearBottom)
+  }
+
+  function stopAssistantResponse() {
+    abortControllerRef.current?.abort()
+    abortControllerRef.current = null
+    setMessages((current) => {
+      const next = [...current]
+      const last = next[next.length - 1]
+
+      if (last?.role === "assistant") {
+        next[next.length - 1] = {
+          ...last,
+          isLoading: false,
+          isStopped: true,
+        }
+      }
+
+      return next
+    })
+    setIsSending(false)
   }
 
   async function applyStateRequest(request) {
@@ -338,10 +548,13 @@ export default function Chat({ initialState }) {
     setIsSending(true)
     setError("")
     setDraft("")
+    shouldStickToBottomRef.current = true
+    abortControllerRef.current = new AbortController()
 
     try {
       const prepared = await jsonRequest("/api/chat/prepare", {
         method: "POST",
+        signal: abortControllerRef.current.signal,
         body: JSON.stringify({
           message: content,
           model: state.selectedModel,
@@ -354,21 +567,30 @@ export default function Chat({ initialState }) {
       })
 
       setState(prepared.state)
-      setMessages([...(prepared.state.messages ?? []), { role: "assistant", content: "" }])
+      setMessages([...(prepared.state.messages ?? []), { role: "assistant", content: "", isLoading: true }])
       await streamAssistantResponse(prepared.streamPayload)
       await refreshState()
     } catch (exception) {
+      if (exception.name === "AbortError") {
+        return
+      }
+
       setError(exception.message)
       setMessages((current) => [...current, { role: "error", content: exception.message }])
     } finally {
+      abortControllerRef.current = null
       setIsSending(false)
     }
   }
 
   async function streamAssistantResponse(payload) {
+    const abortController = abortControllerRef.current ?? new AbortController()
+    abortControllerRef.current = abortController
+
     const response = await fetch("/api/chat/stream", {
       method: "POST",
       credentials: "same-origin",
+      signal: abortController.signal,
       headers: {
         Accept: "text/event-stream, application/json",
         "Content-Type": "application/json",
@@ -410,7 +632,11 @@ export default function Chat({ initialState }) {
             const next = [...current]
             const last = next[next.length - 1]
             if (last?.role === "assistant") {
-              next[next.length - 1] = { ...last, content: `${last.content}${data.content}` }
+              next[next.length - 1] = {
+                ...last,
+                isLoading: false,
+                content: `${last.content}${data.content}`,
+              }
             }
             return next
           })
@@ -487,7 +713,11 @@ export default function Chat({ initialState }) {
 
           {!isOllamaAvailable ? <OllamaUnavailableBanner message={ollamaMessage} url={state.ollama?.url} /> : null}
 
-          <ScrollArea className="min-h-0 flex-1">
+          <ScrollArea
+            viewportRef={scrollViewportRef}
+            onViewportScroll={handleScroll}
+            className="min-h-0 flex-1"
+          >
             <div className="mx-auto flex min-h-full w-full max-w-5xl flex-col gap-4 px-4 py-6 sm:px-6">
               {state.selectedModel ? (
                 <div className="text-center text-lg font-semibold">{state.selectedModel}</div>
@@ -506,6 +736,18 @@ export default function Chat({ initialState }) {
               <div ref={messagesEndRef} />
             </div>
           </ScrollArea>
+
+          {showScrollToBottom ? (
+            <Button
+              type="button"
+              size="sm"
+              className="absolute bottom-28 left-1/2 z-20 -translate-x-1/2 rounded-full shadow-lg"
+              onClick={() => scrollToBottom()}
+            >
+              <ArrowDown className="h-4 w-4" />
+              Bas
+            </Button>
+          ) : null}
 
           <div className="border-t border-border bg-card/95 p-3 sm:p-4">
             {error ? (
@@ -536,12 +778,14 @@ export default function Chat({ initialState }) {
                 className="max-h-44 min-h-10 resize-none rounded-r-none text-sm lg:text-base"
               />
               <Button
-                type="submit"
-                disabled={!state.selectedModel || !isOllamaAvailable || isSending || !draft.trim()}
+                type={isSending ? "button" : "submit"}
+                variant={isSending ? "destructive" : "default"}
+                disabled={!isSending && (!state.selectedModel || !isOllamaAvailable || !draft.trim())}
+                onClick={isSending ? stopAssistantResponse : undefined}
                 className="h-auto rounded-l-none px-4 sm:px-5"
-                aria-label="Envoyer"
+                aria-label={isSending ? "Stopper la réponse" : "Envoyer"}
               >
-                {isSending ? <Loader2 className="animate-spin" /> : <Send />}
+                {isSending ? <Square /> : <Send />}
               </Button>
               <Button
                 type="button"
@@ -917,29 +1161,173 @@ function MessageBubble({ message }) {
     <div className={cn("flex", isUser ? "justify-end" : "justify-start")}>
       <div
         className={cn(
-          "max-w-[82%] whitespace-pre-wrap px-4 py-2 text-sm leading-relaxed",
+          "group max-w-[88%] px-4 py-3 text-sm leading-relaxed shadow-sm sm:max-w-[82%]",
           isUser
-            ? "rounded-bl-xl rounded-br-sm rounded-tl-xl rounded-tr-xl bg-primary text-primary-foreground"
-            : "rounded-bl-sm rounded-br-xl rounded-tl-xl rounded-tr-xl bg-muted text-foreground"
+            ? "rounded-bl-2xl rounded-br-md rounded-tl-2xl rounded-tr-2xl bg-primary text-primary-foreground"
+            : "rounded-bl-md rounded-br-2xl rounded-tl-2xl rounded-tr-2xl border border-border bg-muted/70 text-foreground"
         )}
       >
-        {isUser
-          ? message.content
-          : splitThinkSegments(message.content).map((segment, index) =>
-              segment.type === "think" ? (
-                <details key={index} className="my-2">
-                  <summary className="cursor-pointer text-xs text-muted-foreground">
-                    Processus de réflexion
-                  </summary>
-                  <div className="mt-2 rounded-md border border-border bg-background p-3 text-xs">
-                    {segment.content}
-                  </div>
-                </details>
-              ) : (
-                <span key={index}>{segment.content}</span>
-              )
-            )}
+        <div className={cn("mb-1 text-[11px] font-medium uppercase tracking-wide", isUser ? "text-primary-foreground/70" : "text-muted-foreground")}>
+          {isUser ? "Vous" : "Assistant"}
+        </div>
+
+        {!isUser && message.isLoading && !message.content ? (
+          <ResponseLoader />
+        ) : isUser ? (
+          <MarkdownContent content={message.content} compact />
+        ) : (
+          splitThinkSegments(message.content).map((segment, index) =>
+            segment.type === "think" ? (
+              <ThinkingSegment key={index} content={segment.content} isStreaming={segment.isStreaming} index={index} />
+            ) : (
+              <MarkdownContent key={index} content={segment.content} />
+            )
+          )
+        )}
+
+        {!isUser && message.isStopped ? (
+          <div className="mt-3 rounded-md border border-amber-300/70 bg-amber-50 px-3 py-2 text-xs text-amber-900 dark:border-amber-500/30 dark:bg-amber-950/30 dark:text-amber-100">
+            Réponse stoppée par l'utilisateur.
+          </div>
+        ) : null}
       </div>
+    </div>
+  )
+}
+
+function ResponseLoader() {
+  return (
+    <div className="flex items-center gap-3 text-sm text-muted-foreground">
+      <Loader2 className="h-4 w-4 animate-spin" />
+      <span>Le modèle prépare sa réponse</span>
+      <span className="flex gap-1" aria-hidden="true">
+        <span className="h-1.5 w-1.5 animate-bounce rounded-full bg-current [animation-delay:-0.2s]" />
+        <span className="h-1.5 w-1.5 animate-bounce rounded-full bg-current [animation-delay:-0.1s]" />
+        <span className="h-1.5 w-1.5 animate-bounce rounded-full bg-current" />
+      </span>
+    </div>
+  )
+}
+
+function ThinkingSegment({ content, isStreaming, index }) {
+  const trimmedContent = content.trim()
+
+  if (!trimmedContent && !isStreaming) {
+    return null
+  }
+
+  return (
+    <details className="my-3 overflow-hidden rounded-xl border border-indigo-200/70 bg-indigo-50/70 text-indigo-950 transition open:bg-indigo-50 dark:border-indigo-500/30 dark:bg-indigo-950/30 dark:text-indigo-100">
+      <summary className="flex cursor-pointer list-none items-start gap-3 p-3 marker:hidden [&::-webkit-details-marker]:hidden">
+        <span className="mt-0.5 rounded-full bg-indigo-100 p-1.5 text-indigo-700 dark:bg-indigo-500/20 dark:text-indigo-200">
+          <BrainCircuit className="h-4 w-4" />
+        </span>
+        <span className="min-w-0 flex-1">
+          <span className="flex flex-wrap items-center gap-2 text-xs font-semibold uppercase tracking-wide">
+            Thinking {index + 1}
+            {isStreaming ? (
+              <span className="inline-flex items-center gap-1 rounded-full bg-indigo-100 px-2 py-0.5 text-[10px] text-indigo-700 dark:bg-indigo-500/20 dark:text-indigo-200">
+                <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-current" />
+                en cours
+              </span>
+            ) : null}
+          </span>
+          <span className="mt-1 line-clamp-2 block text-xs leading-5 text-indigo-800/80 dark:text-indigo-100/75">
+            {thinkingPreview(trimmedContent)}
+          </span>
+        </span>
+        <ChevronDown className="mt-1 h-4 w-4 shrink-0 text-indigo-700 transition group-open:rotate-180 dark:text-indigo-200" />
+      </summary>
+      <div className="border-t border-indigo-200/70 bg-background/80 p-3 text-xs text-muted-foreground dark:border-indigo-500/30">
+        {trimmedContent ? (
+          <MarkdownContent content={trimmedContent} compact />
+        ) : (
+          <p>Le modèle prépare sa réflexion...</p>
+        )}
+      </div>
+    </details>
+  )
+}
+
+function MarkdownContent({ content, compact = false }) {
+  const blocks = parseMarkdownBlocks(content)
+
+  if (!blocks.length) {
+    return null
+  }
+
+  return (
+    <div className={cn("space-y-3", compact && "space-y-2")}>
+      {blocks.map((block, index) => {
+        if (block.type === "code") {
+          return <CodeBlock key={index} language={block.language} content={block.content} />
+        }
+
+        if (block.type === "heading") {
+          const HeadingTag = `h${Math.min(block.level + 2, 6)}`
+          return (
+            <HeadingTag key={index} className="mt-4 first:mt-0 text-base font-semibold leading-snug">
+              {renderInlineMarkdown(block.content, `heading-${index}`)}
+            </HeadingTag>
+          )
+        }
+
+        if (block.type === "quote") {
+          return (
+            <blockquote key={index} className="border-l-4 border-primary/40 pl-3 text-muted-foreground">
+              {renderInlineMarkdown(block.content, `quote-${index}`)}
+            </blockquote>
+          )
+        }
+
+        if (block.type === "list") {
+          const ListTag = block.ordered ? "ol" : "ul"
+          return (
+            <ListTag
+              key={index}
+              className={cn(
+                "space-y-1 pl-5",
+                block.ordered ? "list-decimal" : "list-disc"
+              )}
+            >
+              {block.items.map((item, itemIndex) => (
+                <li key={itemIndex}>{renderInlineMarkdown(item, `list-${index}-${itemIndex}`)}</li>
+              ))}
+            </ListTag>
+          )
+        }
+
+        return (
+          <p key={index} className="leading-7">
+            {renderInlineMarkdown(block.content, `paragraph-${index}`)}
+          </p>
+        )
+      })}
+    </div>
+  )
+}
+
+function CodeBlock({ language, content }) {
+  async function copyCode() {
+    await navigator.clipboard?.writeText(content)
+  }
+
+  return (
+    <div className="overflow-hidden rounded-xl border border-border bg-zinc-950 text-zinc-50 shadow-sm">
+      <div className="flex items-center justify-between border-b border-white/10 bg-white/5 px-3 py-2">
+        <span className="text-xs font-medium text-zinc-300">{language || "code"}</span>
+        <button
+          type="button"
+          onClick={copyCode}
+          className="inline-flex items-center gap-1 rounded-md px-2 py-1 text-xs text-zinc-300 transition hover:bg-white/10 hover:text-white"
+        >
+          <Copy className="h-3.5 w-3.5" />
+          Copier
+        </button>
+      </div>
+      <pre className="overflow-x-auto p-4 text-[13px] leading-6">
+        <code>{content}</code>
+      </pre>
     </div>
   )
 }

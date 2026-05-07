@@ -9,6 +9,7 @@ use App\Services\OllamaHealthService;
 use App\Services\RagService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Log;
 use Symfony\Component\HttpFoundation\StreamedResponse;
 
@@ -62,6 +63,7 @@ class ChatStreamController extends Controller
                 $ollamaHost = config('services.ollama.host', 'localhost');
                 $ollamaPort = config('services.ollama.port', '11434');
                 $ollamaUrl = 'http://'.$ollamaHost.':'.$ollamaPort.'/api/chat';
+                $thinkingEnabled = $this->modelSupportsThinking($validated['model']);
 
                 $payload = [
                     'model' => $validated['model'],
@@ -73,10 +75,15 @@ class ChatStreamController extends Controller
                     'stream' => true,
                 ];
 
+                if ($thinkingEnabled) {
+                    $payload['think'] = true;
+                }
+
                 Log::info('Démarrage du streaming vers Ollama', [
                     'url' => $ollamaUrl,
                     'model' => $validated['model'],
                     'message_count' => count($validated['messages']),
+                    'thinking_enabled' => $thinkingEnabled,
                 ]);
 
                 // Initialiser cURL pour le streaming
@@ -106,6 +113,7 @@ class ChatStreamController extends Controller
                 $this->temperature = $validated['temperature'] ?? 0.7;
                 $this->maxTokens = $validated['maxTokens'] ?? 2048;
                 $this->ragEnabled = $validated['ragEnabled'] ?? false;
+                $this->thinkingOpen = false;
 
                 // Exécuter la requête cURL
                 $result = curl_exec($ch);
@@ -114,6 +122,15 @@ class ChatStreamController extends Controller
                 curl_close($ch);
 
                 if ($result === false || ! empty($error)) {
+                    if (connection_aborted() || str_contains(strtolower($error), 'write')) {
+                        Log::info('Streaming arrêté par le client', [
+                            'model' => $validated['model'],
+                            'conversation_id' => $this->conversationId,
+                        ]);
+
+                        return;
+                    }
+
                     $this->sendSSEEvent('error', ['message' => 'Erreur de connexion: '.$error]);
                     Log::error('Erreur cURL lors du streaming', ['error' => $error]);
                 } elseif ($httpCode !== 200) {
@@ -159,11 +176,17 @@ class ChatStreamController extends Controller
 
     private bool $ragEnabled = false;
 
+    private bool $thinkingOpen = false;
+
     /**
      * Fonction de callback pour traiter les chunks de données du streaming
      */
     private function handleStreamChunk($ch, $data)
     {
+        if (connection_aborted()) {
+            return 0;
+        }
+
         $lines = explode("\n", $data);
 
         foreach ($lines as $line) {
@@ -178,29 +201,36 @@ class ChatStreamController extends Controller
                     continue;
                 }
 
-                if (isset($json['message']['content'])) {
+                if (! empty($json['message']['thinking'])) {
+                    $thinking = $json['message']['thinking'];
+                    $chunk = $this->thinkingOpen ? $thinking : '<think>'.$thinking;
+                    $this->thinkingOpen = true;
+
+                    $this->appendAndSendChunk($chunk);
+                }
+
+                if (isset($json['message']['content']) && $json['message']['content'] !== '') {
                     $content = $json['message']['content'];
-                    $this->completeResponse .= $content;
-
-                    // Sauvegarder le chunk en temps réel dans la BD
-                    $conversation = Conversation::where('id', $this->conversationId)
-                        ->where('user_id', Auth::id())
-                        ->first();
-
-                    if ($conversation) {
-                        $this->updateAssistantMessageInDatabase($conversation, $this->completeResponse);
+                    if ($this->thinkingOpen) {
+                        $content = '</think>'.$content;
+                        $this->thinkingOpen = false;
                     }
 
-                    // Émettre l'événement chunk
-                    $this->sendSSEEvent('chunk', [
-                        'content' => $content,
-                        'conversationId' => $this->conversationId,
-                    ]);
+                    $this->appendAndSendChunk($content);
                 }
 
                 // Si c'est le dernier message, traiter les statistiques
                 if (isset($json['done']) && $json['done'] === true) {
+                    if ($this->thinkingOpen) {
+                        $this->appendAndSendChunk('</think>');
+                        $this->thinkingOpen = false;
+                    }
+
                     $this->handleFinalResponse($json);
+                }
+
+                if (connection_aborted()) {
+                    return 0;
                 }
 
             } catch (\Exception $e) {
@@ -217,7 +247,27 @@ class ChatStreamController extends Controller
         }
         flush();
 
-        return strlen($data);
+        return connection_aborted() ? 0 : strlen($data);
+    }
+
+    private function appendAndSendChunk(string $content): void
+    {
+        $this->completeResponse .= $content;
+
+        // Sauvegarder le chunk en temps réel dans la BD
+        $conversation = Conversation::where('id', $this->conversationId)
+            ->where('user_id', Auth::id())
+            ->first();
+
+        if ($conversation) {
+            $this->updateAssistantMessageInDatabase($conversation, $this->completeResponse);
+        }
+
+        // Émettre l'événement chunk
+        $this->sendSSEEvent('chunk', [
+            'content' => $content,
+            'conversationId' => $this->conversationId,
+        ]);
     }
 
     /**
@@ -289,6 +339,30 @@ class ChatStreamController extends Controller
             ob_flush();
         }
         flush();
+    }
+
+    private function modelSupportsThinking(string $model): bool
+    {
+        try {
+            $ollamaHost = config('services.ollama.host', 'localhost');
+            $ollamaPort = config('services.ollama.port', '11434');
+            $response = Http::timeout(3)->post("http://{$ollamaHost}:{$ollamaPort}/api/show", [
+                'name' => $model,
+            ]);
+
+            if (! $response->successful()) {
+                return false;
+            }
+
+            return in_array('thinking', $response->json('capabilities', []), true);
+        } catch (\Throwable $e) {
+            Log::debug('Unable to detect thinking capability', [
+                'model' => $model,
+                'error' => $e->getMessage(),
+            ]);
+
+            return false;
+        }
     }
 
     private function extractTokensFromLastResponse()
