@@ -8,6 +8,6 @@ $logout = function (Logout $logout) {
 };
 ?>
 
-<x-danger-button wire:click="logout" id="logout-button" class="w-full flex justify-center items-center px-4 py-2 text-sm text-custom-black dark:text-custom-white rounded-md">
+<x-ui.button wire:click="logout" id="logout-button" variant="ghost" class="w-full justify-center px-3 py-2 text-sm text-destructive hover:bg-destructive/10 hover:text-destructive">
     {{ __('Log Out') }}
-</x-danger-button> 
+</x-ui.button> 

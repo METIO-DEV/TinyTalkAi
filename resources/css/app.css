@@ -1,28 +1,121 @@
-@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap');
+@import "tailwindcss";
+@import "tw-animate-css";
+@import "@fontsource-variable/geist";
 
-@tailwind base;
-@tailwind components;
-@tailwind utilities;
+@custom-variant dark (&:where(.dark, .dark *));
+
+@source "../views/**/*.blade.php";
+@source "../js/**/*.{js,ts,tsx}";
+@source "../../app/Filament/**/*.php";
+@source "../../vendor/filament/**/*.blade.php";
+
+@plugin "@tailwindcss/forms";
+
+@theme {
+    --font-sans: "Inter", "Geist Variable", ui-sans-serif, system-ui, sans-serif;
+    --color-background: var(--background);
+    --color-foreground: var(--foreground);
+    --color-card: var(--card);
+    --color-card-foreground: var(--card-foreground);
+    --color-popover: var(--popover);
+    --color-popover-foreground: var(--popover-foreground);
+    --color-primary: var(--primary);
+    --color-primary-foreground: var(--primary-foreground);
+    --color-secondary: var(--secondary);
+    --color-secondary-foreground: var(--secondary-foreground);
+    --color-muted: var(--muted);
+    --color-muted-foreground: var(--muted-foreground);
+    --color-accent: var(--accent);
+    --color-accent-foreground: var(--accent-foreground);
+    --color-destructive: var(--destructive);
+    --color-destructive-foreground: var(--destructive-foreground);
+    --color-border: var(--border);
+    --color-input: var(--input);
+    --color-ring: var(--ring);
+    --radius-sm: calc(var(--radius) - 4px);
+    --radius-md: calc(var(--radius) - 2px);
+    --radius-lg: var(--radius);
+    --radius-xl: calc(var(--radius) + 4px);
+    --color-custom-light: #E0E0E0;
+    --color-custom-white: #FFFFFF;
+    --color-custom-mid: #CDCDCD;
+    --color-custom-black: #000000;
+    --color-custom-light-dark-mode: #323232;
+    --color-custom-white-dark-mode: #141313;
+    --color-custom-mid-dark-mode: #606060;
+}
 
 @layer base {
     :root {
+        --radius: 0.75rem;
+        --radius-md: calc(var(--radius) - 2px);
         --color-light: #E0E0E0;
         --color-white: #FFFFFF;
         --color-mid: #CDCDCD;
         --color-black: #000000;
+        --background: #f5f4ef;
+        --foreground: #111111;
+        --card: #ffffff;
+        --card-foreground: #111111;
+        --popover: #ffffff;
+        --popover-foreground: #111111;
+        --primary: #111111;
+        --primary-foreground: #faf7f0;
+        --secondary: #ebe7de;
+        --secondary-foreground: #191919;
+        --muted: #efebe3;
+        --muted-foreground: #6b665e;
+        --accent: #e5ddd0;
+        --accent-foreground: #191919;
+        --destructive: #b42318;
+        --destructive-foreground: #fff4f2;
+        --border: #ddd5c8;
+        --input: #e7e0d4;
+        --ring: #6e6457;
     }
-    
+
+    .dark {
+        --background: #141313;
+        --foreground: #f6f0e7;
+        --card: #1d1b19;
+        --card-foreground: #f6f0e7;
+        --popover: #1d1b19;
+        --popover-foreground: #f6f0e7;
+        --primary: #f0e7d8;
+        --primary-foreground: #141313;
+        --secondary: #2a2622;
+        --secondary-foreground: #f6f0e7;
+        --muted: #24211d;
+        --muted-foreground: #b5ab9b;
+        --accent: #312c27;
+        --accent-foreground: #f6f0e7;
+        --destructive: #ff8a80;
+        --destructive-foreground: #2d0d0a;
+        --border: #3a342d;
+        --input: #2d2924;
+        --ring: #c1b29e;
+    }
+
+    html {
+        background-color: var(--background);
+    }
+
     body {
-        font-family: 'Inter', sans-serif;
+        font-family: "Inter", "Geist Variable", sans-serif;
+        background-color: var(--background);
+        color: var(--foreground);
+    }
+
+    * {
+        outline-color: color-mix(in oklab, var(--ring) 50%, transparent);
     }
 }
 
 @layer components {
-    /* Animation de rotation pour les icônes de la sidebar */
     [data-collapse-toggle] svg {
         transition: transform 0.3s ease-in-out;
     }
-    
+
     [data-collapse-toggle] svg.rotate-180 {
         transform: rotate(180deg);
     }
@@ -30,7 +123,7 @@
     [data-collapse-toggle] svg.rotate-90 {
         transform: rotate(90deg);
     }
-    /* Rotation de -90deg */
+
     [data-collapse-toggle] svg.rotate--90 {
         transform: rotate(-90deg);
     }

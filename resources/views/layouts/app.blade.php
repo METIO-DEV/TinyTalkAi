@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="{{ str_replace('_', '-', app()->getLocale()) }}">
+<html lang="{{ str_replace('_', '-', app()->getLocale()) }}" class="dark h-full">
     <head>
         <meta charset="utf-8">
         <meta name="viewport" content="width=device-width, initial-scale=1">
@@ -16,8 +16,8 @@
         <!-- Scripts -->
         @vite(['resources/css/app.css', 'resources/js/app.js'])
     </head>
-    <body class="font-sans antialiased">
-        <div class="min-h-screen bg-custom-light dark:bg-custom-light-dark-mode">
+    <body class="h-full bg-background font-sans text-foreground antialiased">
+        <div class="min-h-screen bg-background">
 
             <!-- Page Content -->
             <main class="max-w-7xl mx-auto py-6 px-4 sm:px-6 lg:px-8">
@@ -26,7 +26,7 @@
             
             <!-- Lien de retour vers le chat -->
             <div class="max-w-7xl mx-auto py-4 px-4 sm:px-6 lg:px-8">
-                <a href="{{ route('home') }}" class="text-custom-black dark:text-custom-white hover:text-gray-700">
+                <a href="{{ route('home') }}" class="text-muted-foreground hover:text-foreground">
                     &larr; Retour au chat
                 </a>
             </div>

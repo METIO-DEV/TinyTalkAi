@@ -5,6 +5,7 @@ namespace App\Http\Controllers;
 use App\Models\Conversation;
 use App\Models\Message;
 use App\Services\ConversationMemoryService;
+use App\Services\OllamaHealthService;
 use App\Services\RagService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
@@ -17,10 +18,13 @@ class ChatStreamController extends Controller
 
     protected RagService $ragService;
 
-    public function __construct(ConversationMemoryService $memoryService, RagService $ragService)
+    protected OllamaHealthService $ollamaHealth;
+
+    public function __construct(ConversationMemoryService $memoryService, RagService $ragService, OllamaHealthService $ollamaHealth)
     {
         $this->memoryService = $memoryService;
         $this->ragService = $ragService;
+        $this->ollamaHealth = $ollamaHealth;
     }
 
     public function stream(Request $request)
@@ -34,12 +38,17 @@ class ChatStreamController extends Controller
         $validated = $request->validate([
             'model' => 'required|string',
             'messages' => 'required|array',
-            'conversationId' => 'nullable|string',
+            'conversationId' => 'nullable|integer',
             'ragEnabled' => 'boolean',
             'selectedCollection' => 'nullable|string',
             'temperature' => 'numeric|min:0|max:2',
             'maxTokens' => 'integer|min:1|max:8192',
         ]);
+
+        $ollamaStatus = $this->ollamaHealth->status();
+        if (! $ollamaStatus['available']) {
+            return response()->json(['message' => $ollamaStatus['message']], 503);
+        }
 
         return new StreamedResponse(function () use ($validated) {
             // Configuration des headers SSE
@@ -90,7 +99,9 @@ class ChatStreamController extends Controller
 
                 // Variables pour accumuler la réponse complète
                 $this->completeResponse = '';
-                $this->conversationId = $validated['conversationId'] ?? null;
+                $this->conversationId = isset($validated['conversationId'])
+                    ? (int) $validated['conversationId']
+                    : null;
                 $this->model = $validated['model'];
                 $this->temperature = $validated['temperature'] ?? 0.7;
                 $this->maxTokens = $validated['maxTokens'] ?? 2048;
@@ -138,7 +149,7 @@ class ChatStreamController extends Controller
     // Variables de classe pour stocker l'état
     private string $completeResponse = '';
 
-    private ?string $conversationId = null;
+    private ?int $conversationId = null;
 
     private string $model = '';
 

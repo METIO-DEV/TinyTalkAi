@@ -48,6 +48,21 @@ return [
     'ollama' => [
         'host' => env('OLLAMA_HOST', 'host.docker.internal'),
         'port' => env('OLLAMA_PORT', '11434'),
+        'embedding_model' => env('OLLAMA_EMBEDDING_MODEL', 'nomic-embed-text'),
+    ],
+
+    /*
+    |--------------------------------------------------------------------------
+    | Qdrant API Configuration
+    |--------------------------------------------------------------------------
+    |
+    | Qdrant stores document embeddings for retrieval augmented generation.
+    |
+    */
+    'qdrant' => [
+        'host' => env('QDRANT_HOST', 'host.docker.internal'),
+        'port' => env('QDRANT_PORT', '6333'),
+        'collection' => env('QDRANT_COLLECTION', 'docs'),
     ],
 
 ];

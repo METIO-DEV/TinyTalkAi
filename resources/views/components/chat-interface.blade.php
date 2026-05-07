@@ -1,10 +1,10 @@
 <!-- Composant pour l'interface de chat -->
-<div class="relative flex flex-col h-full bg-custom-white dark:bg-custom-light-dark-mode dark:text-custom-white xl:rounded-lg xl:shadow-xl rounded-none shadow-none">
+<div class="relative flex flex-col h-full bg-card text-card-foreground border-border xl:rounded-lg xl:border xl:shadow-xl rounded-none shadow-none">
     <!-- Bouton flottant (mobile) pour ouvrir la sidebar -->
     <button
         id="open-sidebar-floating"
         type="button"
-        class="xl:hidden absolute top-4 left-4 z-10 inline-flex items-center gap-2 p-2 rounded-md border border-custom-mid bg-custom-white text-custom-black shadow-md dark:bg-custom-light-dark-mode dark:text-custom-white"
+        class="xl:hidden absolute top-4 left-4 z-10 inline-flex size-9 items-center justify-center rounded-md border border-input bg-background text-foreground shadow-md transition-colors hover:bg-accent hover:text-accent-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
         aria-label="{{ __('Menu') }}">
         <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" viewBox="0 0 20 20" fill="currentColor"><path d="M3 5h14a1 1 0 100-2H3a1 1 0 000 2zm14 4H3a1 1 0 100 2h14a1 1 0 100-2zm0 6H3a1 1 0 100 2h14a1 1 0 100-2z"/></svg>
     </button>
@@ -12,11 +12,11 @@
     @livewire('chat-messages')
     
     <!-- Zone de saisie du message -->
-    <div class="p-4 bg-transparent">
+    <div class="border-t border-border bg-card/95 p-3 sm:p-4">
         @livewire('chat-form')
         
         <!-- Compteur de tokens -->
-        <div class="mt-2 flex flex-row justify-around items-center">
+        <div class="mt-3 flex flex-row justify-around items-center gap-3">
             <livewire:token-counter />
             <div class="lg:flex hidden">
                 <livewire:rag-toggle />
@@ -29,7 +29,7 @@
 <!-- Templates pour les messages -->
 <template id="user-message-template">
     <div class="flex justify-end mb-4">
-        <div class="bg-custom-black text-white dark:text-custom-white dark:bg-custom-white-dark-mode rounded-tl-xl rounded-tr-xl rounded-bl-xl rounded-br-sm py-2 px-4 max-w-[80%]">
+        <div class="bg-primary text-primary-foreground rounded-tl-xl rounded-tr-xl rounded-bl-xl rounded-br-sm py-2 px-4 max-w-[80%]">
             <div class="whitespace-pre-wrap message-content"></div>
         </div>
     </div>
@@ -37,7 +37,7 @@
 
 <template id="ai-message-template">
     <div class="flex justify-start mb-4 animate-fade-in">
-        <div class="bg-custom-light text-custom-black rounded-lg py-2 px-4 max-w-[80%] rounded-tl-xl rounded-tr-xl rounded-bl-sm rounded-br-xl">
+        <div class="bg-muted text-foreground rounded-lg py-2 px-4 max-w-[80%] rounded-tl-xl rounded-tr-xl rounded-bl-sm rounded-br-xl">
             <div class="whitespace-pre-wrap message-content typing-animation"></div>
         </div>
     </div>
@@ -45,15 +45,15 @@
 
 <template id="loading-message-template">
     <div class="flex justify-start mb-4 loading-message">
-        <div class="bg-custom-light text-custom-black dark:text-custom-white dark:bg-custom-light-dark-mode rounded-lg py-3 px-4">
+        <div class="bg-muted text-foreground rounded-lg py-3 px-4">
             <div class="flex items-center space-x-3">
-                <div class="animate-spin h-5 w-5 text-custom-black dark:text-custom-white">
+                <div class="animate-spin h-5 w-5 text-foreground">
                     <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                         <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
                         <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
                     </svg>
                 </div>
-                <div class="text-sm text-custom-black dark:text-custom-white ml-2 font-medium">Génération en cours...</div>
+                <div class="text-sm text-foreground ml-2 font-medium">Génération en cours...</div>
             </div>
         </div>
     </div>
@@ -61,7 +61,7 @@
 
 <template id="error-message-template">
     <div class="flex justify-center mb-4">
-        <div class="bg-red-100 border border-red-400 text-red-700 rounded-lg py-2 px-4 max-w-[80%]">
+        <div class="bg-destructive/10 border border-destructive text-destructive rounded-lg py-2 px-4 max-w-[80%]">
             <div class="whitespace-pre-wrap message-content"></div>
         </div>
     </div>
@@ -69,7 +69,7 @@
 
 <template id="model-selection-message-template">
     <div id="model-selection-message" class=" p-4 my-4 text-center">
-        <p class="text-custom-black dark:text-custom-white font-bold text-lg mt-1 model-name"></p>
+        <p class="text-foreground font-semibold text-lg mt-1 model-name"></p>
     </div>
 </template>
 
@@ -228,7 +228,7 @@ function initStreamingRenderer(containerEl) {
             <span class="think-reflect" data-text="${thinkLabel}">${thinkLabel}</span>
         `;
         const content = document.createElement('div');
-        content.className = 'mt-2 border border-custom-mid bg-white text-custom-black rounded p-3 whitespace-pre-wrap text-sm';
+        content.className = 'mt-2 border border-border bg-background text-foreground rounded-md p-3 whitespace-pre-wrap text-sm';
         details.appendChild(summary);
         details.appendChild(content);
         state.container.appendChild(details);

@@ -5,7 +5,6 @@ namespace Database\Seeders;
 use App\Models\User;
 // use Illuminate\Database\Console\Seeds\WithoutModelEvents;
 use Illuminate\Database\Seeder;
-use Illuminate\Support\Facades\Hash;
 
 class DatabaseSeeder extends Seeder
 {
@@ -21,30 +20,27 @@ class DatabaseSeeder extends Seeder
         $this->call(ModelGroupSeeder::class);
 
         // Créer un utilisateur admin
-        $admin = User::factory()->create([
+        $admin = User::query()->updateOrCreate(['email' => 'admin@tinytalk.ai'], [
             'name' => 'Admin',
-            'email' => 'admin@tinytalk.ai',
-            'password' => Hash::make('password'),
+            'password' => 'password',
         ]);
 
         // Assigner le rôle admin
         $admin->assignRole('admin');
 
         // Créer un second admin (ancien super-admin)
-        $secondAdmin = User::factory()->create([
+        $secondAdmin = User::query()->updateOrCreate(['email' => 'gaston@metio.fr'], [
             'name' => 'Gaston Admin',
-            'email' => 'gaston@metio.fr',
-            'password' => Hash::make('12345678'),
+            'password' => '12345678',
         ]);
 
         // Assigner le rôle admin
         $secondAdmin->assignRole('admin');
 
         // Créer un utilisateur de test
-        User::factory()->create([
+        User::query()->updateOrCreate(['email' => 'test@example.com'], [
             'name' => 'Test User',
-            'email' => 'test@example.com',
-            'password' => Hash::make('password'),
+            'password' => 'password',
         ])->assignRole('user');
     }
 }

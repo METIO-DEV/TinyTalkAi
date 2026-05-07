@@ -3,6 +3,7 @@
 namespace App\Livewire;
 
 use App\Models\AIModel;
+use App\Services\ModelSyncService;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Log;
 use Livewire\Component;
@@ -74,9 +75,22 @@ class ModelSelector extends Component
         try {
             $user = Auth::user();
             $userGroups = $user ? $user->groups->pluck('id')->toArray() : [];
+            $isAdmin = $user && method_exists($user, 'hasRole') && $user->hasRole('admin');
+
+            if (! AIModel::query()->where('is_active', true)->exists()) {
+                $stats = app(ModelSyncService::class)->sync();
+
+                Log::info('Synchronisation Ollama de secours au chargement des modèles', [
+                    'created' => $stats['created'],
+                    'updated' => $stats['updated'],
+                    'deactivated' => $stats['deactivated'],
+                    'skipped' => $stats['skipped'],
+                    'errors' => $stats['errors'],
+                ]);
+            }
 
             // Si l'utilisateur est connecté mais n'a pas de groupes, retourner une liste vide
-            if ($user && empty($userGroups)) {
+            if ($user && ! $isAdmin && empty($userGroups)) {
                 $this->availableModels = [];
 
                 // Log pour débogage
@@ -93,8 +107,8 @@ class ModelSelector extends Component
             // Requête de base pour les modèles actifs
             $query = AIModel::query()->where('is_active', true);
 
-            // Filtrer par groupes pour tous les utilisateurs (y compris les admins)
-            if ($user && ! empty($userGroups)) {
+            // Les admins voient tous les modèles actifs, les autres sont filtrés par groupes
+            if ($user && ! $isAdmin && ! empty($userGroups)) {
                 // Récupérer les modèles associés aux groupes de l'utilisateur
                 $query->whereHas('groups', function ($q) use ($userGroups) {
                     $q->whereIn('groups.id', $userGroups);

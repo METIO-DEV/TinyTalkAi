@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="{{ str_replace('_', '-', app()->getLocale()) }}" class="h-full">
+<html lang="{{ str_replace('_', '-', app()->getLocale()) }}" class="dark h-full">
 <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
@@ -19,10 +19,10 @@
     @vite(['resources/css/app.css', 'resources/js/app.js'])
     
 </head>
-<body class="font-sans antialiased h-full transition-colors duration-200 bg-custom-light dark:bg-custom-white-dark-mode dark:text-custom-white">
+<body class="font-sans antialiased h-full transition-colors duration-200 bg-background text-foreground">
     <div class="min-h-screen flex relative">
         <!-- Responsive sidebar: drawer on mobile, static column on xl+ -->
-        <div id="responsive-sidebar" class="fixed inset-y-0 left-0 z-50 w-80 max-w-[85vw] transform -translate-x-full transition-transform duration-200 ease-in-out bg-custom-light dark:bg-custom-white-dark-mode shadow-xl overflow-y-auto
+        <div id="responsive-sidebar" class="fixed inset-y-0 left-0 z-50 w-80 max-w-[85vw] transform -translate-x-full transition-transform duration-200 ease-in-out bg-background shadow-xl overflow-y-auto
                                         xl:static xl:translate-x-0 xl:shadow-none xl:w-1/5 xl:shrink-0 xl:h-screen xl:overflow-hidden">
             <x-sidebar />
         </div>

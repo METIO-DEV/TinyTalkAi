@@ -57,6 +57,11 @@ class DocumentUploader extends Component
     public bool $success = false;
 
     /**
+     * Classes appliquees au bouton d'ouverture.
+     */
+    public string $buttonClass = '';
+
+    /**
      * Service RAG
      */
     protected RagService $ragService;
@@ -98,8 +103,10 @@ class DocumentUploader extends Component
     /**
      * Initialisation du composant
      */
-    public function mount()
+    public function mount(string $buttonClass = '')
     {
+        $this->buttonClass = $buttonClass;
+
         // Récupérer le modèle d'embedding depuis la configuration
         $this->embeddingModel = config('services.ollama.embedding_model', 'nomic-embed-text:latest');
 
