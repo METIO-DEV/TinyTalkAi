@@ -57,52 +57,6 @@ class EditCollection extends EditRecord
 
     protected function afterSave(): void
     {
-        // Vérifier si le nom de la collection a été modifié
-        if ($this->record->wasChanged('name')) {
-            // Dans ce cas, il faudrait supprimer l'ancienne collection et en créer une nouvelle
-            // car Qdrant ne permet pas de renommer une collection
-            $oldName = $this->record->getOriginal('name');
-            $newName = $this->record->name;
-
-            $qdrantService = app(QdrantCollectionsService::class);
-
-            // Supprimer l'ancienne collection
-            $deleted = $qdrantService->deleteCollection($oldName);
-
-            // Créer la nouvelle collection
-            $created = $qdrantService->createCollection($newName);
-
-            if ($deleted && $created) {
-                Log::info('Collection renommée avec succès dans Qdrant', [
-                    'old_name' => $oldName,
-                    'new_name' => $newName,
-                ]);
-
-                Notification::make()
-                    ->title(__('Collection renamed'))
-                    ->body(__('The collection was successfully renamed in Qdrant.'))
-                    ->success()
-                    ->send();
-            } else {
-                Log::error('Échec du renommage de la collection dans Qdrant', [
-                    'old_name' => $oldName,
-                    'new_name' => $newName,
-                    'deleted' => $deleted,
-                    'created' => $created,
-                ]);
-
-                Notification::make()
-                    ->title(__('Warning'))
-                    ->body(__('The collection was renamed in the database but not in Qdrant.'))
-                    ->warning()
-                    ->send();
-            }
-        }
-
-        // Pour les autres modifications (description, is_active, etc.)
-        // Qdrant ne stocke pas ces informations, donc aucune action n'est nécessaire
-
-        // Déclencher l'événement de mise à jour de collection pour les mises à jour en temps réel
         event(new CollectionChanged('updated', $this->record));
     }
 

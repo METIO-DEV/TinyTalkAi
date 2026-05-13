@@ -13,10 +13,14 @@ class AIModel extends Model
     protected $table = 'models';
 
     protected $fillable = [
+        'provider',
         'name',
         'full_name',
         'size',
         'family',
+        'context_window',
+        'max_output_tokens',
+        'capabilities',
         'is_active',
         'last_synced_at',
     ];
@@ -25,6 +29,9 @@ class AIModel extends Model
         'is_active' => 'boolean',
         'last_synced_at' => 'datetime',
         'family' => 'string',
+        'capabilities' => 'array',
+        'context_window' => 'integer',
+        'max_output_tokens' => 'integer',
     ];
 
     /**

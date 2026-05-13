@@ -4,6 +4,8 @@ namespace App\Services;
 
 use App\Models\Conversation;
 use App\Models\Message;
+use App\Models\UserAIProviderAccount;
+use App\Support\ChatMessageContent;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Log;
 
@@ -52,16 +54,18 @@ class ConversationMemoryService
         foreach ($messages as $message) {
             $formattedMessages[] = [
                 'role' => $message->role, // utilisateur ou assistant
-                'content' => $this->contentForPrompt($message->content), // contenu du message
+                'content' => $this->contentForPrompt($message->content, $message->content_parts), // contenu du message
             ];
         }
 
         return $formattedMessages;
     }
 
-    private function contentForPrompt(string $content): string
+    private function contentForPrompt(?string $content, ?array $parts): string
     {
-        return trim((string) preg_replace('/<think>[\s\S]*?<\/think>/i', '', $content));
+        $plainText = ChatMessageContent::toPlainText($parts, $content ?? '');
+
+        return trim((string) preg_replace('/<think>[\s\S]*?<\/think>/i', '', $plainText));
     }
 
     /**
@@ -134,13 +138,8 @@ class ConversationMemoryService
         $messagesContent = '';
         foreach ($messages as $message) {
             $role = $message->role === 'user' ? 'Utilisateur' : 'Assistant';
-            $messagesContent .= "{$role}: {$message->content}\n\n";
+            $messagesContent .= "{$role}: ".$this->contentForPrompt($message->content, $message->content_parts)."\n\n";
         }
-
-        // Configuration de l'API Ollama
-        $ollamaHost = config('services.ollama.host', 'host.docker.internal');
-        $ollamaPort = config('services.ollama.port', '11434');
-        $ollamaUrl = 'http://'.$ollamaHost.':'.$ollamaPort.'/api/chat';
 
         // Utiliser le même modèle que celui de la conversation
         $modelName = $conversation->model_name;
@@ -158,20 +157,13 @@ class ConversationMemoryService
                 ],
             ];
 
-            // Appeler l'API pour générer le résumé
-            $response = Http::timeout(300)->post($ollamaUrl, [
-                'model' => $modelName,
-                'messages' => $promptMessages,
-                'options' => [
-                    'temperature' => 0.3, // Température basse pour plus de cohérence
-                    'max_tokens' => 300, // Limiter la longueur du résumé
-                ],
-                'stream' => false,
-            ]);
+            $provider = $conversation->provider ?? 'ollama';
+            $response = $provider !== 'ollama'
+                ? $this->requestProviderSummary($conversation, $promptMessages)
+                : $this->requestOllamaSummary($modelName, $promptMessages);
 
-            if ($response->successful()) {
-                // Extraire le résumé généré selon la structure de réponse de l'API
-                $newSummary = $response->json('message.content');
+            if ($response['successful']) {
+                $newSummary = $response['content'];
 
                 if ($newSummary) {
                     // Récupérer le dernier message pour définir summary_message_id
@@ -180,7 +172,7 @@ class ConversationMemoryService
                         ->first();
 
                     // Récupérer les informations de tokens depuis la réponse de l'API
-                    $summaryTokens = $response->json('eval_count', 0);
+                    $summaryTokens = $response['tokens'];
 
                     // Mettre à jour le résumé dans la base de données
                     $conversation->summary = $newSummary;
@@ -204,13 +196,14 @@ class ConversationMemoryService
                     return true;
                 } else {
                     Log::error('Réponse de l\'API sans contenu pour le résumé', [
-                        'response' => $response->json(),
+                        'provider' => $provider,
                     ]);
                 }
             } else {
                 Log::error('Erreur lors de la génération du résumé', [
-                    'status' => $response->status(),
-                    'body' => $response->body(),
+                    'provider' => $provider,
+                    'status' => $response['status'],
+                    'body' => $response['body'],
                 ]);
             }
         } catch (\Exception $e) {
@@ -221,5 +214,52 @@ class ConversationMemoryService
         }
 
         return false;
+    }
+
+    private function requestOllamaSummary(string $modelName, array $promptMessages): array
+    {
+        $ollamaHost = config('services.ollama.host', 'host.docker.internal');
+        $ollamaPort = config('services.ollama.port', '11434');
+        $ollamaUrl = 'http://'.$ollamaHost.':'.$ollamaPort.'/api/chat';
+
+        $response = Http::timeout(300)->post($ollamaUrl, [
+            'model' => $modelName,
+            'messages' => $promptMessages,
+            'options' => [
+                'temperature' => 0.3,
+                'num_predict' => 300,
+            ],
+            'stream' => false,
+        ]);
+
+        return [
+            'successful' => $response->successful(),
+            'content' => $response->json('message.content'),
+            'tokens' => (int) $response->json('eval_count', 0),
+            'status' => $response->status(),
+            'body' => $response->body(),
+        ];
+    }
+
+    private function requestProviderSummary(Conversation $conversation, array $promptMessages): array
+    {
+        $provider = $conversation->provider ?? 'ollama';
+        $account = UserAIProviderAccount::query()
+            ->where('user_id', $conversation->user_id)
+            ->where('provider', $provider)
+            ->where('status', 'connected')
+            ->first();
+
+        if (! $account) {
+            return [
+                'successful' => false,
+                'content' => null,
+                'tokens' => 0,
+                'status' => 422,
+                'body' => "{$provider} account is not connected.",
+            ];
+        }
+
+        return app(AIProviderStreamService::class)->requestSummary($account, $promptMessages, $conversation->model_name);
     }
 }

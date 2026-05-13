@@ -62,6 +62,11 @@ class User extends Authenticatable implements FilamentUser
         return $this->hasMany(Collection::class);
     }
 
+    public function aiProviderAccounts()
+    {
+        return $this->hasMany(UserAIProviderAccount::class);
+    }
+
     /**
      * Attach groups and emit UserGroupChanged.
      *

@@ -89,7 +89,7 @@ class QdrantCollectionsService
                 'url' => $qdrantUrl,
             ]);
 
-            $response = Http::get($qdrantUrl);
+            $response = Http::timeout(10)->get($qdrantUrl);
 
             if ($response->successful()) {
                 $collections = $response->json('result.collections', []);
@@ -143,7 +143,7 @@ class QdrantCollectionsService
             // La dimension dépend du modèle d'embedding utilisé
             $dimension = $this->getEmbeddingDimension();
 
-            $response = Http::put($qdrantUrl, [
+            $response = Http::timeout(30)->put($qdrantUrl, [
                 'vectors' => [
                     'size' => $dimension,
                     'distance' => 'Cosine',
@@ -194,7 +194,7 @@ class QdrantCollectionsService
                 'collectionName' => $collectionName,
             ]);
 
-            $response = Http::delete($qdrantUrl);
+            $response = Http::timeout(30)->delete($qdrantUrl);
 
             if ($response->successful()) {
                 Log::info('Collection supprimée avec succès', [
@@ -242,7 +242,7 @@ class QdrantCollectionsService
                 'collectionName' => $collectionName,
             ]);
 
-            $response = Http::get($qdrantUrl);
+            $response = Http::timeout(10)->get($qdrantUrl);
 
             return $response->successful();
         } catch (\Exception $e) {
@@ -271,7 +271,7 @@ class QdrantCollectionsService
                 'collectionName' => $collectionName,
             ]);
 
-            $response = Http::get($qdrantUrl);
+            $response = Http::timeout(10)->get($qdrantUrl);
 
             if ($response->successful()) {
                 $info = $response->json('result', []);
@@ -298,6 +298,75 @@ class QdrantCollectionsService
 
             return [];
         }
+    }
+
+    public function getDocumentStats(string $collectionName): array
+    {
+        $stats = [
+            'documentCount' => 0,
+            'chunkCount' => 0,
+            'documentTitles' => [],
+        ];
+
+        try {
+            $info = $this->getCollectionInfo($collectionName);
+            $stats['chunkCount'] = (int) ($info['points_count'] ?? $info['vectors_count'] ?? 0);
+
+            $qdrantUrl = "http://{$this->qdrantHost}:{$this->qdrantPort}/collections/{$collectionName}/points/scroll";
+            $documentIds = [];
+            $documentTitles = [];
+            $offset = null;
+
+            do {
+                $payload = [
+                    'limit' => 256,
+                    'with_payload' => true,
+                    'with_vector' => false,
+                ];
+
+                if ($offset !== null) {
+                    $payload['offset'] = $offset;
+                }
+
+                $response = Http::timeout(10)->post($qdrantUrl, $payload);
+
+                if (! $response->successful()) {
+                    Log::warning('Impossible de compter les documents Qdrant', [
+                        'collectionName' => $collectionName,
+                        'status' => $response->status(),
+                        'body' => $response->body(),
+                    ]);
+
+                    break;
+                }
+
+                foreach ($response->json('result.points', []) as $point) {
+                    $payload = $point['payload'] ?? [];
+                    $documentId = $payload['document_id'] ?? null;
+
+                    if (is_string($documentId) && $documentId !== '') {
+                        $documentIds[$documentId] = true;
+
+                        if (! isset($documentTitles[$documentId])) {
+                            $title = $payload['title'] ?? $payload['filename'] ?? $documentId;
+                            $documentTitles[$documentId] = is_string($title) && $title !== '' ? $title : $documentId;
+                        }
+                    }
+                }
+
+                $offset = $response->json('result.next_page_offset');
+            } while ($offset !== null);
+
+            $stats['documentCount'] = count($documentIds);
+            $stats['documentTitles'] = array_slice(array_values($documentTitles), 0, 3);
+        } catch (\Throwable $e) {
+            Log::warning('Erreur lors du calcul des statistiques de collection', [
+                'collectionName' => $collectionName,
+                'message' => $e->getMessage(),
+            ]);
+        }
+
+        return $stats;
     }
 
     /**

@@ -43,7 +43,7 @@ class RagService
         $this->ollamaPort = config('services.ollama.port', '11434');
         $this->embeddingModel = EmbeddingModel::getActiveModel();
 
-        Log::info('RagService initialized', [
+        Log::debug('RagService initialized', [
             'embedding_model' => $this->embeddingModel,
             'ollama_host' => $this->ollamaHost,
             'ollama_port' => $this->ollamaPort,
@@ -118,7 +118,7 @@ class RagService
      */
     public function generateEmbedding(string $text, ?string $model = null): array
     {
-        Log::info('Generating embedding', [
+        Log::debug('Generating embedding', [
             'model' => $model ?? $this->embeddingModel,
             'text_length' => strlen($text),
         ]);
@@ -126,7 +126,7 @@ class RagService
         try {
             $ollamaUrl = "http://{$this->ollamaHost}:{$this->ollamaPort}/api/embeddings";
 
-            $response = Http::post($ollamaUrl, [
+            $response = Http::timeout(60)->post($ollamaUrl, [
                 'model' => $model ?? $this->embeddingModel,
                 'prompt' => $text,
                 'options' => [
@@ -136,7 +136,7 @@ class RagService
 
             if ($response->successful()) {
                 $embedding = $response->json('embedding', []);
-                Log::info('Embedding generated successfully', [
+                Log::debug('Embedding generated successfully', [
                     'model' => $model ?? $this->embeddingModel,
                     'embedding_dimensions' => count($embedding ?? []),
                 ]);
@@ -147,7 +147,6 @@ class RagService
             Log::error('Failed to generate embedding', [
                 'model' => $model ?? $this->embeddingModel,
                 'status' => $response->status(),
-                'response' => $response->body(),
             ]);
 
             return [];
@@ -166,7 +165,7 @@ class RagService
         try {
             $qdrantUrl = "http://{$this->qdrantHost}:{$this->qdrantPort}/collections/{$this->qdrantCollection}";
 
-            Log::info("Vérification de l'existence de la collection Qdrant", [
+            Log::debug("Vérification de l'existence de la collection Qdrant", [
                 'url' => $qdrantUrl,
                 'collection' => $this->qdrantCollection,
                 'host' => $this->qdrantHost,
@@ -174,17 +173,18 @@ class RagService
             ]);
 
             // Vérifier si la collection existe
-            $response = Http::get($qdrantUrl);
+            $response = Http::timeout(10)->get($qdrantUrl);
 
             if ($response->successful()) {
-                Log::info("Collection {$this->qdrantCollection} existe déjà");
+                Log::debug('Collection Qdrant exists', [
+                    'collection' => $this->qdrantCollection,
+                ]);
 
                 return true;
             }
 
-            Log::info("La collection n'existe pas, tentative de création", [
+            Log::debug("La collection n'existe pas, tentative de création", [
                 'status' => $response->status(),
-                'body' => $response->body(),
             ]);
 
             // Créer la collection si elle n'existe pas
@@ -198,26 +198,25 @@ class RagService
                 ],
             ];
 
-            Log::info('Création de la collection Qdrant (selon doc officielle)', [
+            Log::debug('Création de la collection Qdrant', [
                 'url' => $createUrl,
                 'method' => 'PUT',
                 'payload' => $payload,
             ]);
 
             // Utiliser PUT selon la documentation officielle
-            $response = Http::put($createUrl, $payload);
+            $response = Http::timeout(30)->put($createUrl, $payload);
 
             if ($response->successful()) {
-                Log::info("Collection {$this->qdrantCollection} créée avec succès", [
-                    'response' => $response->json(),
+                Log::info('Collection Qdrant créée avec succès', [
+                    'collection' => $this->qdrantCollection,
                 ]);
 
                 return true;
             } else {
                 Log::error('Erreur lors de la création de la collection', [
                     'status' => $response->status(),
-                    'body' => $response->body(),
-                    'headers' => $response->headers(),
+                    'collection' => $this->qdrantCollection,
                 ]);
 
                 return false;
@@ -274,25 +273,27 @@ class RagService
                 ],
             ];
 
-            Log::info("Tentative d'insertion du document dans Qdrant", [
+            Log::debug("Tentative d'insertion du document dans Qdrant", [
                 'url' => $qdrantUrl,
                 'pointId' => $pointId,
                 'payload_structure' => array_keys($payload),
             ]);
 
             // Utiliser PUT selon la documentation officielle
-            $response = Http::put($qdrantUrl, $payload);
+            $response = Http::timeout(30)->put($qdrantUrl, $payload);
 
             if ($response->successful()) {
-                Log::info("Document {$pointId} inséré avec succès", [
-                    'response' => $response->json(),
+                Log::debug('Chunk inséré avec succès dans Qdrant', [
+                    'pointId' => $pointId,
+                    'collection' => $this->qdrantCollection,
                 ]);
 
                 return true;
             } else {
                 Log::error("Erreur lors de l'insertion du document", [
                     'status' => $response->status(),
-                    'body' => $response->body(),
+                    'collection' => $this->qdrantCollection,
+                    'pointId' => $pointId,
                 ]);
 
                 return false;
@@ -325,18 +326,15 @@ class RagService
                 $originalCollection = $this->qdrantCollection;
                 $this->qdrantCollection = $collection;
 
-                Log::info('Utilisation temporaire de la collection pour la recherche', [
+                Log::debug('Utilisation temporaire de la collection pour la recherche', [
                     'collection' => $collection,
-                    'query' => $query,
                 ]);
             }
 
-            // Log pour vérifier quelle collection est effectivement utilisée
-            Log::info('Collection utilisée pour la recherche', [
+            Log::debug('Collection utilisée pour la recherche RAG', [
                 'collection' => $this->qdrantCollection,
                 'original_collection' => $originalCollection,
                 'param_collection' => $collection,
-                'query' => $query,
             ]);
 
             // Générer l'embedding de la requête
@@ -344,8 +342,8 @@ class RagService
 
             if (empty($embedding)) {
                 Log::error("Impossible de générer l'embedding pour la recherche", [
-                    'query' => $query,
                     'model' => $this->embeddingModel,
+                    'collection' => $this->qdrantCollection,
                 ]);
 
                 // Restaurer la collection originale si nécessaire
@@ -379,30 +377,30 @@ class RagService
                     ],
                 ];
 
-                Log::info('Recherche RAG avec filtrage par documents', [
+                Log::debug('Recherche RAG avec filtrage par documents', [
                     'document_ids' => $documentIds,
                     'count' => count($documentIds),
-                    'query' => $query,
                 ]);
             } else {
                 Log::warning('Recherche RAG sans filtrage par documents - tous les documents seront considérés', [
-                    'query' => $query,
+                    'collection' => $this->qdrantCollection,
                 ]);
             }
 
-            Log::info('Requête Qdrant', [
+            Log::debug('Requête Qdrant RAG', [
                 'url' => $qdrantUrl,
-                'request_data' => $requestData,
+                'limit' => $limit,
+                'has_filter' => isset($requestData['filter']),
             ]);
 
-            $response = Http::post($qdrantUrl, $requestData);
+            $response = Http::timeout(30)->post($qdrantUrl, $requestData);
 
             if ($response->successful()) {
                 $results = $response->json('result', []);
 
-                Log::info('Résultats bruts de Qdrant', [
+                Log::debug('Résultats Qdrant récupérés', [
                     'count' => count($results),
-                    'response' => $response->json(),
+                    'collection' => $this->qdrantCollection,
                 ]);
 
                 // Extraire les textes et les scores
@@ -422,10 +420,9 @@ class RagService
                         'metadata' => array_diff_key($result['payload'] ?? [], ['text' => '', 'document_id' => '']),
                     ];
 
-                    Log::info('Document pertinent trouvé', [
+                    Log::debug('Document pertinent trouvé', [
                         'document_id' => $result['payload']['document_id'] ?? 'inconnu',
                         'score' => $score,
-                        'text_preview' => substr($result['payload']['text'] ?? '', 0, 100).'...',
                     ]);
                 }
 
@@ -436,9 +433,11 @@ class RagService
 
                 return $documents;
             } else {
-                Log::error('Erreur lors de la recherche de documents: '.$response->body(), [
+                Log::error('Erreur lors de la recherche de documents', [
                     'status' => $response->status(),
-                    'request_data' => $requestData,
+                    'collection' => $this->qdrantCollection,
+                    'limit' => $limit,
+                    'has_filter' => isset($requestData['filter']),
                 ]);
 
                 // Restaurer la collection originale si nécessaire
@@ -476,10 +475,9 @@ class RagService
                 $this->qdrantCollection = $collection;
             }
 
-            Log::info('Traitement du document', [
+            Log::debug('Traitement du document RAG', [
                 'documentId' => $documentId,
                 'contentLength' => strlen($content),
-                'metadata' => $metadata,
                 'collection' => $this->qdrantCollection,
             ]);
 
@@ -488,7 +486,7 @@ class RagService
 
             // Découper le contenu en chunks
             $chunks = $this->chunkText($content);
-            Log::info('Document découpé en chunks', ['count' => count($chunks)]);
+            Log::debug('Document découpé en chunks', ['count' => count($chunks)]);
 
             $successCount = 0;
 
@@ -516,7 +514,7 @@ class RagService
                 }
             }
 
-            Log::info('Traitement du document terminé', [
+            Log::info('Traitement du document RAG terminé', [
                 'documentId' => $documentId,
                 'totalChunks' => count($chunks),
                 'successfulChunks' => $successCount,
@@ -590,11 +588,6 @@ EOT;
             }
 
             // Log de la réponse brute pour diagnostic
-            Log::info("Réponse brute de l'API Ollama:", [
-                'status' => $response->status(),
-                'body' => $response->body(),
-            ]);
-
             $models = $response->json('models', []);
 
             // Log des modèles récupérés
@@ -742,7 +735,7 @@ EOT;
                 'limit' => $limit,
             ]);
 
-            $response = Http::post($qdrantUrl, [
+            $response = Http::timeout(30)->post($qdrantUrl, [
                 'limit' => $limit,
                 'with_payload' => true,
                 'with_vector' => false,
@@ -751,16 +744,16 @@ EOT;
             if ($response->successful()) {
                 $results = $response->json('result.points', []);
 
-                Log::info('Points récupérés avec succès', [
+                Log::debug('Points récupérés avec succès', [
                     'count' => count($results),
-                    'response' => $response->json(),
+                    'collection' => $this->qdrantCollection,
                 ]);
 
                 return $results;
             } else {
                 Log::error('Erreur lors du listage des points', [
                     'status' => $response->status(),
-                    'body' => $response->body(),
+                    'collection' => $this->qdrantCollection,
                 ]);
 
                 return [];

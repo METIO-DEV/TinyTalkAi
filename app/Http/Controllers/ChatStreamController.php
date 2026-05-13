@@ -4,13 +4,18 @@ namespace App\Http\Controllers;
 
 use App\Models\Conversation;
 use App\Models\Message;
+use App\Models\UserAIProviderAccount;
+use App\Services\AIProviderConfigService;
+use App\Services\AIProviderStreamService;
 use App\Services\ConversationMemoryService;
 use App\Services\OllamaHealthService;
 use App\Services\RagService;
+use App\Support\ChatMessageContent;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Log;
+use Illuminate\Validation\ValidationException;
 use Symfony\Component\HttpFoundation\StreamedResponse;
 
 class ChatStreamController extends Controller
@@ -21,8 +26,13 @@ class ChatStreamController extends Controller
 
     protected OllamaHealthService $ollamaHealth;
 
-    public function __construct(ConversationMemoryService $memoryService, RagService $ragService, OllamaHealthService $ollamaHealth)
-    {
+    public function __construct(
+        ConversationMemoryService $memoryService,
+        RagService $ragService,
+        OllamaHealthService $ollamaHealth,
+        private readonly AIProviderStreamService $providerStream,
+        private readonly AIProviderConfigService $providerConfigs,
+    ) {
         $this->memoryService = $memoryService;
         $this->ragService = $ragService;
         $this->ollamaHealth = $ollamaHealth;
@@ -35,23 +45,57 @@ class ChatStreamController extends Controller
             return response()->json(['error' => 'Non authentifié'], 401);
         }
 
-        // Valider les données de la requête
         $validated = $request->validate([
-            'model' => 'required|string',
-            'messages' => 'required|array',
-            'conversationId' => 'nullable|integer',
-            'ragEnabled' => 'boolean',
-            'selectedCollection' => 'nullable|string',
-            'temperature' => 'numeric|min:0|max:2',
-            'maxTokens' => 'integer|min:1|max:8192',
+            'streamToken' => 'required|string',
         ]);
 
-        $ollamaStatus = $this->ollamaHealth->status();
-        if (! $ollamaStatus['available']) {
-            return response()->json(['message' => $ollamaStatus['message']], 503);
+        $payloads = session('chat_stream_payloads', []);
+        $streamEntry = $payloads[$validated['streamToken']] ?? null;
+        unset($payloads[$validated['streamToken']]);
+        session(['chat_stream_payloads' => $payloads]);
+
+        $streamPayload = is_array($streamEntry) && (int) ($streamEntry['expires_at'] ?? 0) > now()->timestamp
+            ? ($streamEntry['payload'] ?? null)
+            : null;
+
+        if (! is_array($streamPayload)) {
+            throw ValidationException::withMessages([
+                'streamToken' => __('This chat stream is no longer available. Please send the message again.'),
+            ]);
         }
 
-        return new StreamedResponse(function () use ($validated) {
+        if (! empty($streamPayload['conversationId'])) {
+            Conversation::where('id', $streamPayload['conversationId'])
+                ->where('user_id', Auth::id())
+                ->firstOrFail();
+        }
+
+        $provider = $streamPayload['provider'] ?? 'ollama';
+
+        if ($provider === 'ollama') {
+            $ollamaStatus = $this->ollamaHealth->status();
+            if (! $ollamaStatus['available']) {
+                return response()->json(['message' => $ollamaStatus['message']], 503);
+            }
+        }
+
+        if ($provider !== 'ollama') {
+            $account = UserAIProviderAccount::query()
+                ->where('user_id', Auth::id())
+                ->where('provider', $provider)
+                ->where('status', 'connected')
+                ->first();
+
+            if (! $account) {
+                return response()->json([
+                    'message' => __('Connect your :provider account before using its models.', [
+                        'provider' => $this->providerConfigs->label($provider),
+                    ]),
+                ], 422);
+            }
+        }
+
+        return new StreamedResponse(function () use ($streamPayload) {
             // Configuration des headers SSE
             header('Content-Type: text/event-stream');
             header('Cache-Control: no-cache');
@@ -59,18 +103,51 @@ class ChatStreamController extends Controller
             header('X-Accel-Buffering: no'); // Pour nginx
 
             try {
+                if (($streamPayload['provider'] ?? 'ollama') !== 'ollama') {
+                    $this->initializeStreamState($streamPayload);
+
+                    $account = UserAIProviderAccount::query()
+                        ->where('user_id', Auth::id())
+                        ->where('provider', $streamPayload['provider'])
+                        ->where('status', 'connected')
+                        ->firstOrFail();
+
+                    $this->providerStream->stream(
+                        $account,
+                        $streamPayload,
+                        fn (string $content) => $this->appendAndSendChunk($content),
+                        fn (array $event) => $this->handleFinalProviderResponse($event),
+                    );
+
+                    $this->sendSSEEvent('complete', [
+                        'response' => $this->completeResponse,
+                        'message' => $this->finalMessage ?? ChatMessageContent::toClientMessage(
+                            'assistant',
+                            $this->completeResponse,
+                            ChatMessageContent::fromText($this->completeResponse),
+                        ),
+                        'conversationId' => $this->conversationId,
+                        'tokens' => $this->lastResponseTokens,
+                    ]);
+
+                    $this->sendSSEEvent('close', []);
+                    $this->summarizeConversationIfNeeded();
+
+                    return;
+                }
+
                 // Préparer les données pour l'API Ollama
                 $ollamaHost = config('services.ollama.host', 'localhost');
                 $ollamaPort = config('services.ollama.port', '11434');
                 $ollamaUrl = 'http://'.$ollamaHost.':'.$ollamaPort.'/api/chat';
-                $thinkingEnabled = $this->modelSupportsThinking($validated['model']);
+                $thinkingEnabled = $this->modelSupportsThinking($streamPayload['model']);
 
                 $payload = [
-                    'model' => $validated['model'],
-                    'messages' => $validated['messages'],
+                    'model' => $streamPayload['model'],
+                    'messages' => $streamPayload['messages'],
                     'options' => [
-                        'temperature' => (float) ($validated['temperature'] ?? 0.7),
-                        'max_tokens' => (int) ($validated['maxTokens'] ?? 2048),
+                        'temperature' => (float) ($streamPayload['temperature'] ?? 0.7),
+                        'num_predict' => (int) ($streamPayload['maxTokens'] ?? 2048),
                     ],
                     'stream' => true,
                 ];
@@ -81,8 +158,8 @@ class ChatStreamController extends Controller
 
                 Log::info('Démarrage du streaming vers Ollama', [
                     'url' => $ollamaUrl,
-                    'model' => $validated['model'],
-                    'message_count' => count($validated['messages']),
+                    'model' => $streamPayload['model'],
+                    'message_count' => count($streamPayload['messages']),
                     'thinking_enabled' => $thinkingEnabled,
                 ]);
 
@@ -105,15 +182,7 @@ class ChatStreamController extends Controller
                 ]);
 
                 // Variables pour accumuler la réponse complète
-                $this->completeResponse = '';
-                $this->conversationId = isset($validated['conversationId'])
-                    ? (int) $validated['conversationId']
-                    : null;
-                $this->model = $validated['model'];
-                $this->temperature = $validated['temperature'] ?? 0.7;
-                $this->maxTokens = $validated['maxTokens'] ?? 2048;
-                $this->ragEnabled = $validated['ragEnabled'] ?? false;
-                $this->thinkingOpen = false;
+                $this->initializeStreamState($streamPayload);
 
                 // Exécuter la requête cURL
                 $result = curl_exec($ch);
@@ -124,7 +193,7 @@ class ChatStreamController extends Controller
                 if ($result === false || ! empty($error)) {
                     if (connection_aborted() || str_contains(strtolower($error), 'write')) {
                         Log::info('Streaming arrêté par le client', [
-                            'model' => $validated['model'],
+                            'model' => $streamPayload['model'],
                             'conversation_id' => $this->conversationId,
                         ]);
 
@@ -140,8 +209,13 @@ class ChatStreamController extends Controller
                     // Envoyer l'événement de fin avec les statistiques
                     $this->sendSSEEvent('complete', [
                         'response' => $this->completeResponse,
+                        'message' => $this->finalMessage ?? ChatMessageContent::toClientMessage(
+                            'assistant',
+                            $this->completeResponse,
+                            ChatMessageContent::fromText($this->completeResponse),
+                        ),
                         'conversationId' => $this->conversationId,
-                        'tokens' => $this->extractTokensFromLastResponse(),
+                        'tokens' => $this->lastResponseTokens,
                     ]);
                 }
 
@@ -155,6 +229,7 @@ class ChatStreamController extends Controller
 
             // Fermer la connexion SSE
             $this->sendSSEEvent('close', []);
+            $this->summarizeConversationIfNeeded();
         }, 200, [
             'Content-Type' => 'text/event-stream',
             'Cache-Control' => 'no-cache',
@@ -177,6 +252,34 @@ class ChatStreamController extends Controller
     private bool $ragEnabled = false;
 
     private bool $thinkingOpen = false;
+
+    private ?array $finalMessage = null;
+
+    private int $lastResponseTokens = 0;
+
+    private string $provider = 'ollama';
+
+    private ?int $tokenLimit = null;
+
+    private ?int $autoSummaryConversationId = null;
+
+    private function initializeStreamState(array $streamPayload): void
+    {
+        $this->completeResponse = '';
+        $this->conversationId = isset($streamPayload['conversationId'])
+            ? (int) $streamPayload['conversationId']
+            : null;
+        $this->provider = $streamPayload['provider'] ?? 'ollama';
+        $this->model = $streamPayload['model'];
+        $this->temperature = $streamPayload['temperature'] ?? 0.7;
+        $this->maxTokens = $streamPayload['maxTokens'] ?? 2048;
+        $this->ragEnabled = $streamPayload['ragEnabled'] ?? false;
+        $this->thinkingOpen = false;
+        $this->finalMessage = null;
+        $this->lastResponseTokens = 0;
+        $this->tokenLimit = isset($streamPayload['tokenLimit']) ? (int) $streamPayload['tokenLimit'] : null;
+        $this->autoSummaryConversationId = null;
+    }
 
     /**
      * Fonction de callback pour traiter les chunks de données du streaming
@@ -280,9 +383,12 @@ class ChatStreamController extends Controller
             $promptTokens = $json['prompt_eval_count'] ?? 0;
             $responseTokens = $json['eval_count'] ?? 0;
             $totalTokens = $promptTokens + $responseTokens;
+            $assistantParts = $this->buildAssistantContentParts($json);
+            $assistantContent = ChatMessageContent::toPlainText($assistantParts, $this->completeResponse);
+            $this->lastResponseTokens = $totalTokens;
 
             Log::info('Réponse streaming complète', [
-                'response_length' => strlen($this->completeResponse),
+                'response_length' => strlen($assistantContent),
                 'total_tokens' => $totalTokens,
                 'conversation_id' => $this->conversationId,
             ]);
@@ -298,10 +404,11 @@ class ChatStreamController extends Controller
                     $conversation->increment('tokens', $totalTokens);
 
                     // Sauvegarder le message de l'assistant
-                    Message::create([
+                    $message = Message::create([
                         'conversation_id' => $conversation->id,
                         'role' => 'assistant',
-                        'content' => $this->completeResponse,
+                        'content' => $assistantContent,
+                        'content_parts' => $assistantParts,
                         'settings' => [
                             'model' => $this->model,
                             'temperature' => $this->temperature,
@@ -309,13 +416,22 @@ class ChatStreamController extends Controller
                             'tokens_used' => $totalTokens,
                             'rag_enabled' => $this->ragEnabled,
                             'streaming' => true,
+                            'provider' => $this->provider,
                         ],
                     ]);
+
+                    $this->finalMessage = ChatMessageContent::toClientMessage(
+                        $message->role,
+                        $message->content,
+                        $message->content_parts,
+                    );
 
                     Log::info('Message assistant sauvegardé', [
                         'conversation_id' => $conversation->id,
                         'tokens' => $totalTokens,
                     ]);
+
+                    $this->autoSummaryConversationId = $conversation->id;
                 }
             }
 
@@ -325,6 +441,97 @@ class ChatStreamController extends Controller
                 'conversation_id' => $this->conversationId,
             ]);
         }
+    }
+
+    private function handleFinalProviderResponse(array $event): void
+    {
+        $response = $event['response'] ?? [];
+        $usage = $response['usage'] ?? $event['message']['usage'] ?? $event['usage'] ?? [];
+        $inputTokens = (int) ($usage['input_tokens'] ?? $usage['prompt_tokens'] ?? 0);
+        $outputTokens = (int) ($usage['output_tokens'] ?? $usage['completion_tokens'] ?? 0);
+        $totalTokens = (int) ($usage['total_tokens'] ?? ($inputTokens + $outputTokens));
+        $this->lastResponseTokens = $totalTokens;
+
+        if (! Auth::check() || ! $this->conversationId || $this->finalMessage) {
+            return;
+        }
+
+        $conversation = Conversation::where('id', $this->conversationId)
+            ->where('user_id', Auth::id())
+            ->first();
+
+        if (! $conversation) {
+            return;
+        }
+
+        if ($totalTokens > 0) {
+            $conversation->increment('tokens', $totalTokens);
+        }
+
+        $assistantParts = $this->buildAssistantContentParts($response);
+        $assistantContent = ChatMessageContent::toPlainText($assistantParts, $this->completeResponse);
+
+        $message = Message::create([
+            'conversation_id' => $conversation->id,
+            'role' => 'assistant',
+            'content' => $assistantContent,
+            'content_parts' => $assistantParts,
+            'settings' => [
+                'provider' => $this->provider,
+                'model' => $this->model,
+                'temperature' => $this->temperature,
+                'max_tokens' => $this->maxTokens,
+                'tokens_used' => $totalTokens,
+                'rag_enabled' => $this->ragEnabled,
+                'streaming' => true,
+            ],
+        ]);
+
+        $this->finalMessage = ChatMessageContent::toClientMessage(
+            $message->role,
+            $message->content,
+            $message->content_parts,
+        );
+
+        $this->autoSummaryConversationId = $conversation->id;
+    }
+
+    private function summarizeConversationIfNeeded(): void
+    {
+        $tokenLimit = $this->tokenLimit;
+
+        if (! $this->autoSummaryConversationId || ! $tokenLimit || $tokenLimit <= 0) {
+            return;
+        }
+
+        $conversation = Conversation::where('id', $this->autoSummaryConversationId)
+            ->where('user_id', Auth::id())
+            ->first();
+
+        if (! $conversation) {
+            return;
+        }
+
+        if (! $this->memoryService->shouldSummarize($conversation->id, (int) $conversation->tokens, $tokenLimit)) {
+            return;
+        }
+
+        $this->memoryService->updateSummary($conversation->id);
+    }
+
+    private function buildAssistantContentParts(array $payload): array
+    {
+        $messageContent = $payload['message']['content'] ?? null;
+
+        if (is_array($messageContent)) {
+            return ChatMessageContent::normalize($messageContent);
+        }
+
+        if (is_array($payload['output'] ?? null)) {
+            return ChatMessageContent::normalize($payload['output']);
+        }
+
+        return ChatMessageContent::fromText($this->completeResponse);
     }
 
     /**
@@ -363,13 +570,6 @@ class ChatStreamController extends Controller
 
             return false;
         }
-    }
-
-    private function extractTokensFromLastResponse()
-    {
-        // Cette méthode devrait être implémentée pour extraire les tokens de la dernière réponse
-        // Pour l'instant, elle retourne 0
-        return 0;
     }
 
     private function updateAssistantMessageInDatabase(Conversation $conversation, string $content)

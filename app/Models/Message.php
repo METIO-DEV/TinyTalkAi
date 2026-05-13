@@ -13,10 +13,12 @@ class Message extends Model
         'conversation_id',
         'role',
         'content',
+        'content_parts',
         'settings',
     ];
 
     protected $casts = [
+        'content_parts' => 'array',
         'settings' => 'array',
     ];
 

@@ -80,6 +80,7 @@ class ModelSyncService
                 $record = AIModel::query()->where('full_name', $fullName)->first();
                 if (! $record) {
                     AIModel::query()->create([
+                        'provider' => 'ollama',
                         'name' => $shortName,
                         'full_name' => $fullName,
                         'size' => $size,
@@ -90,6 +91,7 @@ class ModelSyncService
                     $stats['created']++;
                 } else {
                     $record->fill([
+                        'provider' => 'ollama',
                         'name' => $shortName,
                         'size' => $size,
                         'family' => $family,
@@ -167,6 +169,7 @@ class ModelSyncService
             $record = AIModel::query()->where('full_name', $fullName)->first();
             if (! $record) {
                 AIModel::query()->create([
+                    'provider' => 'ollama',
                     'name' => $shortName,
                     'full_name' => $fullName,
                     'size' => $size,
@@ -178,6 +181,7 @@ class ModelSyncService
                 return true;
             }
             $record->fill([
+                'provider' => 'ollama',
                 'name' => $shortName,
                 'size' => $size,
                 'family' => $family,

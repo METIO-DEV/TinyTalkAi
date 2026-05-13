@@ -7,6 +7,7 @@ use App\Models\Conversation;
 use App\Models\Message;
 use App\Services\ConversationMemoryService;
 use App\Services\RagService;
+use App\Support\ChatMessageContent;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Log;
 use Livewire\Attributes\On;
@@ -473,6 +474,7 @@ class ChatForm extends Component
                     'conversation_id' => $conversation->id,
                     'role' => 'user',
                     'content' => $userMessage,
+                    'content_parts' => ChatMessageContent::fromText($userMessage),
                     'settings' => [
                         'model' => $this->selectedModel,
                         'temperature' => $temperature,

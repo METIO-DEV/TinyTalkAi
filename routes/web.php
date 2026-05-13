@@ -1,7 +1,7 @@
 <?php
 
-use App\Http\Controllers\ChatStreamController;
 use App\Http\Controllers\ChatAppController;
+use App\Http\Controllers\ChatStreamController;
 use App\Http\Middleware\SetLocale;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Hash;
@@ -64,6 +64,7 @@ Route::middleware(['auth', SetLocale::class])->prefix('/api/chat')->group(functi
     Route::post('/model', [ChatAppController::class, 'selectModel'])->name('chat.model');
     Route::post('/conversation', [ChatAppController::class, 'selectConversation'])->name('chat.conversation.select');
     Route::post('/conversation/new', [ChatAppController::class, 'newConversation'])->name('chat.conversation.new');
+    Route::post('/conversation/document', [ChatAppController::class, 'uploadConversationDocument'])->name('chat.conversation.document');
     Route::delete('/conversation', [ChatAppController::class, 'deleteConversation'])->name('chat.conversation.delete');
     Route::post('/rag', [ChatAppController::class, 'toggleRag'])->name('chat.rag');
     Route::post('/collection', [ChatAppController::class, 'selectCollection'])->name('chat.collection.select');
@@ -71,15 +72,17 @@ Route::middleware(['auth', SetLocale::class])->prefix('/api/chat')->group(functi
     Route::post('/collection/document', [ChatAppController::class, 'uploadCollectionDocument'])->name('chat.collection.document');
     Route::delete('/collection', [ChatAppController::class, 'deleteCollection'])->name('chat.collection.delete');
     Route::post('/prepare', [ChatAppController::class, 'prepareMessage'])->name('chat.prepare');
-    Route::post('/summarize', [ChatAppController::class, 'summarize'])->name('chat.summarize');
+    Route::post('/openai-account', [ChatAppController::class, 'saveOpenAIAccount'])->name('chat.openai.save');
+    Route::post('/openai-account/test', [ChatAppController::class, 'testOpenAIAccount'])->name('chat.openai.test');
+    Route::delete('/openai-account', [ChatAppController::class, 'disconnectOpenAIAccount'])->name('chat.openai.disconnect');
+    Route::post('/provider-accounts/{provider}', [ChatAppController::class, 'saveProviderAccount'])->name('chat.provider.save');
+    Route::post('/provider-accounts/{provider}/test', [ChatAppController::class, 'testProviderAccount'])->name('chat.provider.test');
+    Route::delete('/provider-accounts/{provider}', [ChatAppController::class, 'disconnectProviderAccount'])->name('chat.provider.disconnect');
 });
 
 // Redirection des anciennes routes vers la page d'accueil
 Route::redirect('dashboard', '/')->name('dashboard');
 Route::redirect('chat', '/');
-
-// Redirection vers la page de login pour éviter l'erreur 404 après expiration de session
-Route::redirect('login', '/login')->name('login');
 
 // Ne pas définir de routes personnalisées pour Filament ici
 // Filament gère ses propres routes via son système interne

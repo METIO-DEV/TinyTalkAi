@@ -31,7 +31,9 @@ class CollectionResource extends Resource
                     ->label(__('Name'))
                     ->required()
                     ->unique(ignoreRecord: true)
-                    ->maxLength(255),
+                    ->maxLength(255)
+                    ->disabledOn('edit')
+                    ->dehydrated(fn (string $operation): bool => $operation === 'create'),
                 Forms\Components\Textarea::make('description')
                     ->label(__('Description'))
                     ->columnSpanFull(),

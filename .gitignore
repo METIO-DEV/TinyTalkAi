@@ -24,6 +24,8 @@ Homestead.json
 
 /public/build
 /storage/pail
+/playwright-report/
+/test-results/
 .env.backup
 .env.production
 .phpactor.json
